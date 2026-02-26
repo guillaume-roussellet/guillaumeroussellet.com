@@ -1,0 +1,17 @@
+{
+  "hash": "4614b2c2476529903cff9def5b24f15f",
+  "result": {
+    "engine": "knitr",
+    "markdown": "---\ntitle: \"Guillaume Roussellet\"\n---\n\n\n\n\n\n\n:::: grid\n::: {.g-col-4 style=\"margin-bottom:0cm; margin-top: 0.32cm\"}\n\n\n\n\n\n::: {.cell}\n::: {.cell-output-display}\n![](pro_picture.png){width=195}\n:::\n:::\n\n\n\n\n\n:::\n::::\n",
+    "supporting": [
+      "contact_files"
+    ],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

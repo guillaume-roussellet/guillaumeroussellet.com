@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.32">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>research – Guillaume Roussellet</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-5745635922ce6326f14308d8da276d93.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">Guillaume Roussellet</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link active" href="./research.html" aria-current="page"> 
+<span class="menu-text">Research</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./teaching.html"> 
+<span class="menu-text">Teaching</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./contact.html"> 
+<span class="menu-text">Contact</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./papers/CV 2025.pdf"> 
+<span class="menu-text">CV</span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+    <a href="https://ideas.repec.org/f/pro836.html" title="IDEAS" class="quarto-navigation-tool px-1" aria-label="IDEAS"><i class="bi bi-lightbulb"></i></a>
+    <a href="https://scholar.google.com/citations?user=WdWmafsAAAAJ&amp;hl=fr" title="Google Scholar" class="quarto-navigation-tool px-1" aria-label="Google Scholar"><i class="bi bi-book"></i></a>
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-full page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
+    </div>
+<!-- main -->
+<main class="content page-columns page-full column-page-left" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block"></header>
+
+
+
+
+<!-- :::::: grid  -->
+<!-- ::: {.g-col-4 style="margin-bottom:0cm; margin-top: 0.32cm"} -->
+<div class="cell page-columns page-full">
+
+<div class="no-row-height column-margin column-container"><div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="pro_picture.png" class="img-fluid figure-img" width="195"></p>
+</figure>
+</div>
+</div></div></div>
+<!-- ::: -->
+<!-- :::: g-col-8 -->
+<section id="assistant-professor-of-finance" class="level3" style="color: black; margin-bottom:0cm; margin-top:-0.25cm;">
+<h3 style="color: black; margin-bottom:0cm; margin-top:-0.25cm;" class="anchored" data-anchor-id="assistant-professor-of-finance"><span style="font-size: 120%"><span class="smallcaps"><strong>Assistant Professor of Finance</strong></span></span></h3>
+<section id="mcgill-university" class="level4" style="color: black; margin-bottom:0.2cm; margin-top:0cm">
+<h4 style="color: black; margin-bottom:0.2cm; margin-top:0cm" class="anchored" data-anchor-id="mcgill-university">McGill University</h4>
+</section>
+</section>
+<section id="research-economist" class="level3" style="color: black; margin-bottom:0cm;">
+<h3 style="color: black; margin-bottom:0cm;" class="anchored" data-anchor-id="research-economist"><span style="font-size: 120%"><span class="smallcaps"><strong>Research Economist</strong></span></span></h3>
+<section id="federal-reserve-bank-of-new-york-on-leave" class="level4" style="color: black; margin-bottom:0.5cm; margin-top:0cm">
+<h4 style="color: black; margin-bottom:0.5cm; margin-top:0cm" class="anchored" data-anchor-id="federal-reserve-bank-of-new-york-on-leave">Federal Reserve Bank of New York (on leave)</h4>
+<div style="font-size: 0.85em; line-height: 1.2;  margin-bottom:-0.2cm; color: black">
+<p><a href="https://www.mcgill.ca/desautels/guillaume-roussellet">McGill webpage</a>, <a href="https://www.newyorkfed.org/research/economists/Roussellet">FRBNY webpage</a><br>
+<span class="math inline">\(\rightarrow\)</span> <a href="mailto:guillaume.roussellet@mcgill.ca">guillaume.roussellet[at]mcgill.ca</a></p>
+</div>
+<!-- :::: -->
+<!-- :::::: -->
+<div style="font-size: 85%">
+<div id="interests">
+<p>🧠 Research interests: <em>Financial Econometrics, Monetary Policy and Macrofinance, Term Structure of Interest Rates, Credit Risk.</em></p>
+</div>
+</div>
+</section>
+</section>
+<section id="working-papers" class="level2" style="color: black">
+<h2 style="color: black" class="anchored" data-anchor-id="working-papers"><span style="font-size: 120%"><span class="smallcaps"><strong>Working Papers</strong></span></span></h2>
+<ul>
+<li><p><span style="font-size: 120%"><a href="papers/Stars_Main_2025_04.pdf"><strong>When Long-Run Trends Are Unknown: Bond Pricing Implications</strong></a></span>, 2025<br>
+<em>with Borel Ahonon</em></p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Abstract </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p>We propose a macro-finance model in which inflation, growth, and the policy rate are driven by unobservable long-run trends and transitory cycles that investors must infer from aggregate data. Their subjective estimates of these trends, and the uncertainty surrounding them, are priced into the Treasury yield curve in a tractable way through both interest rate expectations and bond risk premia. Empirical estimates reveal an upward smooth trend in the long-run real interest rate (r-star) until the 1980s, and large investor uncertainty with confidence bands on as wide as 3.4 percentage points, contrasting with the volatile rate implied by perfect information models.</p>
+</div>
+</details>
+</div></li>
+<li><p><span style="font-size: 120%"><a href="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3478738"><strong>What do Bond Investors Learn from Macroeconomic News?</strong></a></span>, 2024,<br>
+<strong>R&amp;R Journal of Finance</strong>, <em>with <a href="https://sites.google.com/view/bruno-feunou/home">Bruno Feunou</a> and <a href="http://www.jean-sebastienfontaine.com/#/">Jean-Sebastien Fontaine</a></em><br>
+</p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Abstract </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p>Macroeconomic data releases drive US bond yields primarily through the term premium instead of the expectation channel. The evidence exploits a monthly specification for yields embedding the impacts of news identified from high-frequency data. To match the facts, we develop and calibrate a no-arbitrage model where investors learn about future monetary policy using data releases with imperfect information. If macro news carry perfect information, the model predicts that the bonds’ Sharpe ratio decreases and the term premium declines by half for every maturity, suggesting that central bank’s communication can lower the term premium and financing costs across the economy.</p>
+</div>
+</details>
+</div></li>
+<li><p><span style="font-size: 120%"><a href="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3400005"><strong>Identifying Beliefs From Asset Prices</strong></a></span>, 2023<br>
+<em>with <a href="https://www.mcgill.ca/desautels/anisha-ghosh">Anisha Ghosh</a></em><br>
+</p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Abstract </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p>We propose a novel methodology to identify investors’ subjective beliefs from asset prices and survey forecasts. Our approach recovers price-consistent beliefs – the conditional distribution of macroeconomic and financial variables satisfying the Euler equations for a cross-section of assets, given an SDF and conditioning set – while producing unbiased survey forecast errors. Our procedure is agnostic about the DGP or investor rationality. Subjective beliefs about consumption growth are indicative of investor exuberance, stemming from overestimation of mean and underestimation of left tail risk. Beliefs about the stock market and its volatility are countercyclical and correlate with institutional investors’ expectations and VIX, respectively.</p>
+</div>
+</details>
+</div></li>
+<li><p><span style="font-size: 120%"><a href="papers/darolles-main-hf-liquidity-2021-2.pdf"><strong>Managing Hedge Fund Liquidity Risks</strong></a></span>, 2023<br>
+<em>with <a href="https://ideas.repec.org/f/pda653.html">Serge Darolles</a></em><br>
+</p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Abstract </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p>We study hedge fund liquidity management in the presence of liquidity risks on the asset and liability sides. We formulate a two-period model where a single fund has always access to a liquid asset and can invest in an illiquid asset which pays off only at the end of period two. Funding liquidity risk takes the form of a random outflow originating from clients in period one. The fund suffers from a random haircut on the illiquid asset’s secondary market to cover its outflow. We solve the allocation problem of the fund and find its optimal allocation between liquid and illiquid assets. We show that the liquidation probability and the portfolio composition of the fund are revealing about the market liquidity and funding liquidity, respectively. Gates, as a device that limits the outflows experienced by the fund, helps it reduce its liquidation risk and harvest liquidity premia</p>
+</div>
+</details>
+</div></li>
+</ul>
+</section>
+<div id="Published" class="page-columns page-full">
+
+<div class="no-row-height column-margin column-container"><div class="btn-group">
+<style>
+.btn-group button {
+  background-color: Indigo; /* Green background */
+  border: 1px solid Indigo; /* Green border */
+  color: white; /* White text */
+  border-radius: 8px;
+  cursor: pointer; /* Pointer/hand icon */
+  margin-left: 0.1cm;
+}
+</style>
+</div></div><section id="published-papers" class="level2 page-columns page-full" style="color: black">
+<h2 style="color: black" class="anchored" data-anchor-id="published-papers"><span style="font-size: 120%"><span class="smallcaps">Published Papers</span></span></h2>
+<ul>
+<li><p><span style="font-size: 120%"><a href="https://onlinelibrary.wiley.com/doi/10.1111/jofi.70014"><strong>Default Risk and the Pricing of U.S. Sovereign Bonds</strong></a></span>,<br>
+<strong>Journal of Finance</strong>, January 2026, <em>with <a href="https://business.rice.edu/person/robert-dittmar">Robert Dittmar</a>, <a href="https://sites.google.com/site/alexchiahsu/">Alex Hsu</a> and <a href="https://sites.google.com/view/petersimasek/home">Peter Simasek</a></em><br>
+</p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Abstract </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p>We examine the relative pricing of nominal Treasury bonds and Treasury inflation protected securities (TIPS) in the presence of United States default risk. Hedged breakeven inflation (ILSBEI) is positively and significantly related to U.S. default risk, driven by correlation between shocks to default risk and both shocks to inflation swap premia and TIPS yields. To understand the mechanisms through which default risk is related to inflation swaps and sovereign yields, we estimate an affine term structure model to capture their joint dynamics. Our estimation implies that the interaction between inflation dynamics and default is the primary source of differential pricing.</p>
+</div>
+</details>
+</div></li>
+</ul>
+
+<div class="no-row-height column-margin column-container"><div class="btn-group">
+<div class="btn-group">
+<button>
+<a href="papers/TIPSTreasury_JFFinal_Appendix.pdf" style="color: white;"> Appendix </a>
+</button>
+<button>
+<a href="https://libertystreeteconomics.newyorkfed.org/2024/07/exploring-the-tips-treasury-valuation-puzzle/" style="color: white;"> Blog Post </a>
+</button>
+</div>
+</div></div><ul>
+<li><p><span style="font-size: 120%"><a href="https://www.sciencedirect.com/science/article/pii/S0304407623000143"><strong>The Term Structure of Macroeconomic Risks at the Zero Lower Bound</strong></a></span><br>
+<strong>Journal of Econometrics</strong>, Vol. 248, March 2025.</p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Bibtex </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p><span class="citation" data-cites="article">@article</span>{ROUSSELLET2025105383,<br>
+title = {The term structure of macroeconomic risks at the effective lower bound},<br>
+journal = {Journal of Econometrics},<br>
+volume = {248},<br>
+pages = {105383},<br>
+year = {2025},<br>
+author = {Roussellet, Guillaume }<br>
+}</p>
+</div>
+</details>
+</div></li>
+</ul>
+
+<div class="no-row-height column-margin column-container"><div class="btn-group">
+<div class="btn-group">
+<button>
+<a href="papers/Internet Appendix JoE.pdf" style="color: white;"> Appendix </a>
+</button>
+<button>
+<a href="papers/Supplementary Material JoE.pdf" style="color: white;"> Other Proofs </a>
+</button>
+</div>
+</div></div><ul>
+<li><p><span style="font-size: 120%"><a href="https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2020.3658"><strong>Affine Modelling of Credit Risk, Pricing of Credit Events and Contagion</strong></a></span><br>
+<strong>Management Science</strong>, Vol. 67, No.&nbsp;6, June 2021<br>
+<em>with <a href="https://faculty.crest.fr/amonfort/">Alain Monfort</a>, <a href="https://crest.science/user/Fulvio-PEGORARO/?profiletab=posts">Fulvio Pegoraro</a> and <a href="https://www.jprenne.com/">Jean-Paul Renne</a></em></p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Bibtex </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p><span class="citation" data-cites="Article">@Article</span>{ROUSSELLET_MS_CREDIT_2020,<br>
+author={Monfort, Alain and Pegoraro, Fulvio and Renne, Jean-Paul and Roussellet, Guillaume},<br>
+title={Affine Modeling of Credit Risk, Pricing of Credit Events and Contagion},<br>
+year={2020},<br>
+journal = {Management Science},<br>
+Volume = {67},<br>
+Number = {6},<br>
+pages = {3321-3984}<br>
+}</p>
+</div>
+</details>
+</div></li>
+</ul>
+
+<div class="no-row-height column-margin column-container"><div class="btn-group">
+<div class="btn-group">
+<button>
+<a href="papers/Affine Credit Submission [APPENDIX].pdf" style="color: white;"> Appendix </a>
+</button>
+<button>
+<a href="papers/RCode.zip" style="color: white;"> Code </a>
+</button>
+</div>
+</div></div><ul>
+<li><p><span style="font-size: 120%"><a href="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3720947#:~:text=While%20the%20restrictions%20imposed%20by,of%20the%20earliest%20states%20did."><strong>Preventing COVID-19 Fatalities: State versus Federal Policies</strong></a></span>, 2020<br>
+<strong>Covid Economics</strong>, Issue 56, Nov.&nbsp;2000<br>
+<em>with <a href="https://www.jprenne.com/">Jean-Paul Renne</a> and <a href="https://www.gustavo-schwenkler.com/">Gustavo Schwenkler</a></em><br>
+</p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Abstract </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p>Are COVID-19 fatalities large when a federal government does not enforce containment policies and instead allow states to implement their own policies? We answer this question by developing a stochastic extension of a SIRD epidemiological model for a country composed of multiple states. Our model allows for interstate mobility. We consider three policies: mask mandates, stay-at-home orders, and interstate travel bans. We fit our model to daily U.S. state-level COVID-19 death counts and exploit our estimates to produce various policy counterfactuals. While the restrictions imposed by some states inhibited a significant number of virus deaths, we find that more than two-thirds of U.S. COVID-19 deaths could have been prevented by late November 2020 had the federal government enforced federal mandates as early as some of the earliest states did. Our results quantify the benefits of early actions by a federal government for the containment of a pandemic.</p>
+</div>
+</details>
+</div></li>
+<li><p><span style="font-size: 120%"><a href="https://www.sciencedirect.com/science/article/pii/S0304407617301641#!"><strong>Scenario Generation for Long-Run Interest Rate Risk Assessment</strong></a></span><br>
+<strong>Journal of Econometrics</strong>, Vol. 201, No.&nbsp;2, December 2017<br>
+<em>with <a href="https://web-static.stern.nyu.edu/rengle/">Robert Engle</a> and <a href="https://www.emilsiriwardane.com/">Emil Siriwardane</a></em></p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Bibtex </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p><span class="citation" data-cites="article">@article</span>{ENGLE2017333,<br>
+title = {Scenario generation for long run interest rate risk assessment},<br>
+journal = {Journal of Econometrics},<br>
+volume = {201},<br>
+number = {2},<br>
+pages = {333-347},<br>
+year = {2017},<br>
+author = {Engle, Robert and Roussellet, Guillaume and Siriwardane, Emil},<br>
+}</p>
+</div>
+</details>
+</div></li>
+<li><p><span style="font-size: 120%"><a href="https://www.sciencedirect.com/science/article/pii/S0304407617301653"><strong>Staying at Zero with Affine Processes</strong></a></span><br>
+<strong>Journal of Econometrics</strong>, Vol. 201, No.&nbsp;2, December 2017<br>
+<em>with <a href="https://faculty.crest.fr/amonfort/">Alain Monfort</a>, <a href="https://crest.science/user/Fulvio-PEGORARO/?profiletab=posts">Fulvio Pegoraro</a> and <a href="https://www.jprenne.com/">Jean-Paul Renne</a></em></p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Bibtex </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p><span class="citation" data-cites="article">@article</span>{MONFORT2017348,<br>
+title = {Staying at zero with affine processes: An application to term structure modelling},<br>
+journal = {Journal of Econometrics},<br>
+volume = {201},<br>
+number = {2},<br>
+pages = {348-366},<br>
+year = {2017},<br>
+author = {Monfort, Alain and Pegoraro, Fulvio and Renne, Jean-Paul and Roussellet, Guillaume }<br>
+}</p>
+</div>
+</details>
+</div></li>
+<li><p><span style="font-size: 120%"><a href="https://www.sciencedirect.com/science/article/pii/S0304407615000123"><strong>A Quadratic Kalman Filter</strong></a></span><br>
+<strong>Journal of Econometrics</strong>, Vol. 187, No.&nbsp;1, July 2015<br>
+<em>joint with <a href="https://faculty.crest.fr/amonfort/">Alain Monfort</a> and <a href="https://www.jprenne.com/">Jean-Paul Renne</a></em></p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Bibtex </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p><span class="citation" data-cites="article">@article</span>{MONFORT201543,<br>
+title = {A Quadratic Kalman Filter},<br>
+journal = {Journal of Econometrics},<br>
+volume = {187},<br>
+number = {1},<br>
+pages = {43-56},<br>
+year = {2015},<br>
+author = {Monfort, Alain and Renne, Jean-Paul and Roussellet, Guillaume}<br>
+}</p>
+</div>
+</details>
+</div></li>
+<li><p><span style="font-size: 120%"><a href="https://www.sciencedirect.com/science/article/pii/S037842661630019X"><strong>Credit and Liquidity in Interbank Rates: A Quadratic Approach</strong></a></span><br>
+<strong>Journal of Banking and Finance</strong>, Vol. 68, July 2016<br>
+<em>with <a href="https://ideas.repec.org/e/pdu191.html">Simon Dubecq</a>, <a href="https://faculty.crest.fr/amonfort/">Alain Monfort</a> and <a href="https://www.jprenne.com/">Jean-Paul Renne</a></em></p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Bibtex </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p><span class="citation" data-cites="article">@article</span>{DUBECQ201629,<br>
+title = {Credit and liquidity in interbank rates: A quadratic approach},<br>
+journal = {Journal of Banking &amp; Finance},<br>
+volume = {68},<br>
+pages = {29-46},<br>
+year = {2016},<br>
+author = {Dubecq, Simon and Monfort, Alain and Renne, Jean-Paul and Roussellet, Guillaume}<br>
+}</p>
+</div>
+</details>
+</div></li>
+<li><p><span style="font-size: 120%"><a href="https://link.springer.com/article/10.1007/s10797-013-9273-0"><strong>Fiscal Sustainability in the Presence of Systemic Banks: The Case of EU Countries</strong></a></span><br>
+<strong>International Tax and Public Finance</strong>, Vol. 21, pp.&nbsp;436-467, 2014<br>
+<em>with <a href="https://www.parisschoolofeconomics.eu/fr/benassy-quere-agnes/">Agnès Bénassy-Quéré</a></em></p>
+<div class="container">
+<details style="margin-top:-0.4cm">
+<summary style="font-size:0.8em">
+<p><i>Bibtex </i></p>
+</summary>
+<div style="font-size:0.75em">
+<p><span class="citation" data-cites="article">@article</span>{AGNESBQ2014,<br>
+title = {Fiscal Sustainability in the Presence of Systemic Banks: The Case of EU Countries},<br>
+journal = {Internationl Tax and Public Finance},<br>
+volume = {21},<br>
+pages = {436-467},<br>
+year = {2014},<br>
+author = {Benassy-Quere, Agnes and Roussellet, Guillaume}<br>
+}</p>
+</div>
+</details>
+</div></li>
+</ul>
+</section>
+</div>
+
+
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+        const codeEl = trigger.previousElementSibling.cloneNode(true);
+        for (const childEl of codeEl.children) {
+          if (isCodeAnnotation(childEl)) {
+            childEl.remove();
+          }
+        }
+        return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/guillaumeroussellet\.quarto\.pub\/guillaume-roussellet");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
