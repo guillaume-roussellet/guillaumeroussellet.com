@@ -1,0 +1,374 @@
+
+
+<!-- :::::: grid  -->
+<!-- ::: {.g-col-4 style="margin-bottom:0cm; margin-top: 0.32cm"} -->
+```{r, echo = F}
+#| fig-column: margin
+knitr::include_graphics("pro_picture.png")
+```
+<!-- ::: -->
+
+<!-- :::: g-col-8 -->
+### [[**Assistant Professor of Finance**]{.smallcaps}]{style="font-size: 120%"} {style="color: black; margin-bottom:0cm; margin-top:-0.25cm;"}
+
+#### McGill University {style="color: black; margin-bottom:0.2cm; margin-top:0cm"}
+
+### [[**Research Economist**]{.smallcaps}]{style="font-size: 120%"} {style="color: black; margin-bottom:0cm;"}
+
+#### Federal Reserve Bank of New York (on leave) {style="color: black; margin-bottom:0.5cm; margin-top:0cm"}
+
+::: {style="font-size: 0.85em; line-height: 1.2;  margin-bottom:-0.2cm; color: black"}
+[McGill webpage](https://www.mcgill.ca/desautels/guillaume-roussellet), [FRBNY webpage](https://www.newyorkfed.org/research/economists/Roussellet)\
+$\rightarrow$ <a href="mailto:guillaume.roussellet@ny.frb.org">guillaume.roussellet\[at\]ny.frb.org</a>
+:::
+<!-- :::: -->
+<!-- :::::: -->
+::::{style="font-size: 85%"}
+::: {#interests}
+🧠 Research interests: *Financial Econometrics, Monetary Policy and Macrofinance, Term Structure of Interest Rates, Credit Risk.*
+:::
+::::
+
+::: {style="margin-bottom:1.5cm"}
+## [[**Working Papers**]{.smallcaps}]{style="font-size: 120%"} {style="color: black"}
+
+-   [[**What do Bond Investors Learn from Macroeconomic News?**](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3478738)]{style="font-size: 120%"}, 2024,\
+**R&R Journal of Finance**, *with [Bruno Feunou](https://sites.google.com/view/bruno-feunou/home) and [Jean-Sebastien Fontaine](http://www.jean-sebastienfontaine.com/#/)*\
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Abstract </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    Macroeconomic data releases drive US bond yields primarily through the term premium instead of the expectation channel. The evidence exploits a monthly specification for yields embedding the impacts of news identified from high-frequency data. To match the facts, we develop and calibrate a no-arbitrage model where investors learn about future monetary policy using data releases with imperfect information. If macro news carry perfect information, the model predicts that the bonds' Sharpe ratio decreases and the term premium declines by half for every maturity, suggesting that central bank's communication can lower the term premium and financing costs across the economy.
+    :::
+
+    </details>
+    ::::
+
+-   [[**Identifying Beliefs From Asset Prices**](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3400005)]{style="font-size: 120%"}, 2023\
+    *with [Anisha Ghosh](https://www.mcgill.ca/desautels/anisha-ghosh)*\
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Abstract </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    We propose a novel methodology to identify investors' subjective beliefs from asset prices and survey forecasts. Our approach recovers price-consistent beliefs -- the conditional distribution of macroeconomic and financial variables satisfying the Euler equations for a cross-section of assets, given an SDF and conditioning set -- while producing unbiased survey forecast errors. Our procedure is agnostic about the DGP or investor rationality. Subjective beliefs about consumption growth are indicative of investor exuberance, stemming from overestimation of mean and underestimation of left tail risk. Beliefs about the stock market and its volatility are countercyclical and correlate with institutional investors' expectations and VIX, respectively.
+    :::
+
+    </details>
+    ::::
+
+-   [[**Managing Hedge Fund Liquidity Risks**](papers/darolles-main-hf-liquidity-2021-2.pdf)]{style="font-size: 120%"}, 2023\
+    *with [Serge Darolles](https://ideas.repec.org/f/pda653.html)*\
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Abstract </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    We study hedge fund liquidity management in the presence of liquidity risks on the asset and liability sides. We formulate a two-period model where a single fund has always access to a liquid asset and can invest in an illiquid asset which pays off only at the end of period two. Funding liquidity risk takes the form of a random outflow originating from clients in period one. The fund suffers from a random haircut on the illiquid asset's secondary market to cover its outflow. We solve the allocation problem of the fund and find its optimal allocation between liquid and illiquid assets. We show that the liquidation probability and the portfolio composition of the fund are revealing about the market liquidity and funding liquidity, respectively. Gates, as a device that limits the outflows experienced by the fund, helps it reduce its liquidation risk and harvest liquidity premia
+    :::
+
+    </details>
+    ::::
+
+
+
+-   When Long-Run Trends Are Unknown: Bond Pricing Implications, 2025\
+    *with Borel Ahonon*
+:::
+
+::::::::::: {#Published}
+::: {.column-margin .btn-group}
+```{=html}
+<style>
+.btn-group button {
+  background-color: Indigo; /* Green background */
+  border: 1px solid Indigo; /* Green border */
+  color: white; /* White text */
+  border-radius: 8px;
+  cursor: pointer; /* Pointer/hand icon */
+  margin-left: 0.1cm;
+}
+</style>
+```
+:::
+
+<div>
+
+## [[Published Papers]{.smallcaps}]{style="font-size: 120%"} {style="color: black"}
+
+-   [[**Default Risk and the Pricing of U.S. Sovereign Bonds**](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3185307)]{style="font-size: 120%"}, 2024\
+    **Journal of Finance**, *forthcoming*, *with [Robert Dittmar](https://business.rice.edu/person/robert-dittmar), [Alex Hsu](https://sites.google.com/site/alexchiahsu/) and [Peter Simasek](https://sites.google.com/view/petersimasek/home)*\
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Abstract </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    We examine the relative pricing of nominal Treasury bonds and Treasury inflation protected securities (TIPS) in the presence of United States default risk. Hedged breakeven inflation (ILSBEI) is positively and significantly related to U.S. default risk, driven by correlation between shocks to default risk and both shocks to inflation swap premia and TIPS yields. To understand the mechanisms through which default risk is related to inflation swaps and sovereign yields, we estimate an affine term structure model to capture their joint dynamics. Our estimation implies that the interaction between inflation dynamics and default is the primary source of differential pricing.
+    :::
+
+    </details>
+    ::::
+
+:::: {.column-margin .btn-group}
+::: btn-group
+<button><a href="papers/TIPSTreasury_JFFinal_Appendix.pdf" style="color: white;"> Appendix </a></button>
+
+<button><a href="https://libertystreeteconomics.newyorkfed.org/2024/07/exploring-the-tips-treasury-valuation-puzzle/" style="color: white;"> Blog Post </a></button>
+:::
+::::
+
+-   [[**The Term Structure of Macroeconomic Risks at the Zero Lower Bound**](https://www.sciencedirect.com/science/article/pii/S0304407623000143)]{style="font-size: 120%"}\
+    **Journal of Econometrics**, *forthcoming*
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Bibtex </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    @article{ROUSSELLET2023105383,\
+    title = {The term structure of macroeconomic risks at the effective lower bound},\
+    journal = {Journal of Econometrics},\
+    pages = {105383},\
+    year = {2023},\
+    author = {Guillaume Roussellet}\
+    }
+    :::
+
+    </details>
+    ::::
+
+:::: {.column-margin .btn-group}
+::: btn-group
+<button><a href="papers/Internet Appendix JoE.pdf" style="color: white;"> Appendix </a></button>
+
+<button><a href="papers/Supplementary Material JoE.pdf" style="color: white;"> Other Proofs </a></button>
+:::
+::::
+
+-   [[**Affine Modelling of Credit Risk, Pricing of Credit Events and Contagion**](https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2020.3658)]{style="font-size: 120%"}\
+    **Management Science**, Vol. 67, No. 6, June 2021\
+    *with [Alain Monfort](https://faculty.crest.fr/amonfort/), [Fulvio Pegoraro](https://crest.science/user/Fulvio-PEGORARO/?profiletab=posts) and [Jean-Paul Renne](https://www.jprenne.com/)*
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Bibtex </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    @Article{ROUSSELLET_MS_CREDIT_2020,\
+    author={Monfort, Alain and Pegoraro, Fulvio and Renne, Jean-Paul and Roussellet, Guillaume},\
+    title={Affine Modeling of Credit Risk, Pricing of Credit Events and Contagion},\
+    year={2020},\
+    journal = {Management Science},\
+    Volume = {67},\
+    Number = {6},\
+    pages = {3321-3984}\
+    }
+    :::
+
+    </details>
+    ::::
+
+:::: {.column-margin .btn-group}
+::: btn-group
+<button><a href="papers/Affine Credit Submission [APPENDIX].pdf" style="color: white;"> Appendix </a></button>
+
+<button><a href="papers/RCode.zip" style="color: white;"> Code </a></button>
+:::
+::::
+
+-   [[**Preventing COVID-19 Fatalities: State versus Federal Policies**](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3720947#:~:text=While%20the%20restrictions%20imposed%20by,of%20the%20earliest%20states%20did.)]{style="font-size: 120%"}, 2020\
+    **Covid Economics**, Issue 56, Nov. 2000\
+    *with [Jean-Paul Renne](https://www.jprenne.com/) and [Gustavo Schwenkler](https://www.gustavo-schwenkler.com/)*\
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Abstract </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    Are COVID-19 fatalities large when a federal government does not enforce containment policies and instead allow states to implement their own policies? We answer this question by developing a stochastic extension of a SIRD epidemiological model for a country composed of multiple states. Our model allows for interstate mobility. We consider three policies: mask mandates, stay-at-home orders, and interstate travel bans. We fit our model to daily U.S. state-level COVID-19 death counts and exploit our estimates to produce various policy counterfactuals. While the restrictions imposed by some states inhibited a significant number of virus deaths, we find that more than two-thirds of U.S. COVID-19 deaths could have been prevented by late November 2020 had the federal government enforced federal mandates as early as some of the earliest states did. Our results quantify the benefits of early actions by a federal government for the containment of a pandemic.
+    :::
+
+    </details>
+    ::::
+
+
+-   [[**Scenario Generation for Long-Run Interest Rate Risk Assessment**](https://www.sciencedirect.com/science/article/pii/S0304407617301641#!)]{style="font-size: 120%"}\
+    **Journal of Econometrics**, Vol. 201, No. 2, December 2017\
+    *with [Robert Engle](https://web-static.stern.nyu.edu/rengle/) and [Emil Siriwardane](https://www.emilsiriwardane.com/)*
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Bibtex </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    @article{ENGLE2017333,\
+    title = {Scenario generation for long run interest rate risk assessment},\
+    journal = {Journal of Econometrics},\
+    volume = {201},\
+    number = {2},\
+    pages = {333-347},\
+    year = {2017},\
+    author = {Engle, Robert and Roussellet, Guillaume and Siriwardane, Emil},\
+    }
+    :::
+
+    </details>
+    ::::
+
+-   [[**Staying at Zero with Affine Processes**](https://www.sciencedirect.com/science/article/pii/S0304407617301653)]{style="font-size: 120%"}\
+    **Journal of Econometrics**, Vol. 201, No. 2, December 2017\
+    *with [Alain Monfort](https://faculty.crest.fr/amonfort/), [Fulvio Pegoraro](https://crest.science/user/Fulvio-PEGORARO/?profiletab=posts) and [Jean-Paul Renne](https://www.jprenne.com/)*
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Bibtex </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    @article{MONFORT2017348,\
+    title = {Staying at zero with affine processes: An application to term structure modelling},\
+    journal = {Journal of Econometrics},\
+    volume = {201},\
+    number = {2},\
+    pages = {348-366},\
+    year = {2017},\
+    author = {Monfort, Alain and Pegoraro, Fulvio and Renne, Jean-Paul and Roussellet, Guillaume }\
+    }
+    :::
+
+    </details>
+    ::::
+
+-   [[**A Quadratic Kalman Filter**](https://www.sciencedirect.com/science/article/pii/S0304407615000123)]{style="font-size: 120%"}\
+    **Journal of Econometrics**, Vol. 187, No. 1, July 2015\
+    *joint with [Alain Monfort](https://faculty.crest.fr/amonfort/) and [Jean-Paul Renne](https://www.jprenne.com/)*
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Bibtex </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    @article{MONFORT201543,\
+    title = {A Quadratic Kalman Filter},\
+    journal = {Journal of Econometrics},\
+    volume = {187},\
+    number = {1},\
+    pages = {43-56},\
+    year = {2015},\
+    author = {Monfort, Alain and Renne, Jean-Paul and Roussellet, Guillaume}\
+    }
+    :::
+
+    </details>
+    ::::
+
+-   [[**Credit and Liquidity in Interbank Rates: A Quadratic Approach**](https://www.sciencedirect.com/science/article/pii/S037842661630019X)]{style="font-size: 120%"}\
+    **Journal of Banking and Finance**, Vol. 68, July 2016\
+    *with [Simon Dubecq](https://ideas.repec.org/e/pdu191.html), [Alain Monfort](https://faculty.crest.fr/amonfort/) and [Jean-Paul Renne](https://www.jprenne.com/)*
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Bibtex </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    @article{DUBECQ201629,\
+    title = {Credit and liquidity in interbank rates: A quadratic approach},\
+    journal = {Journal of Banking & Finance},\
+    volume = {68},\
+    pages = {29-46},\
+    year = {2016},\
+    author = {Dubecq, Simon and Monfort, Alain and Renne, Jean-Paul and Roussellet, Guillaume}\
+    }
+    :::
+
+    </details>
+    ::::
+
+-   [[**Fiscal Sustainability in the Presence of Systemic Banks: The Case of EU Countries**](https://link.springer.com/article/10.1007/s10797-013-9273-0)]{style="font-size: 120%"}\
+    **International Tax and Public Finance**, Vol. 21, pp. 436-467, 2014\
+    *with [Agnès Bénassy-Quéré](https://www.parisschoolofeconomics.eu/fr/benassy-quere-agnes/)*
+
+    :::: container
+    <details style="margin-top:-0.4cm">
+
+    <summary style="font-size:0.8em">
+
+    <i>Bibtex </i>
+
+    </summary>
+
+    ::: {style="font-size:0.75em"}
+    @article{AGNESBQ2014,\
+    title = {Fiscal Sustainability in the Presence of Systemic Banks: The Case of EU Countries},\
+    journal = {Internationl Tax and Public Finance},\
+    volume = {21},\
+    pages = {436-467},\
+    year = {2014},\
+    author = {Benassy-Quere, Agnes and Roussellet, Guillaume}\
+    }
+    :::
+
+    </details>
+    ::::
+
+</div>
+:::::::::::

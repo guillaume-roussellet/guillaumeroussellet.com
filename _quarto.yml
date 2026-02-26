@@ -1,0 +1,38 @@
+project:
+  type: website
+
+website:
+  title: "Guillaume Roussellet"
+  site-url: https://guillaumeroussellet.com
+  navbar:
+    background: "Lavender"
+    left:
+      - href: research.qmd
+        text: "Research"
+      - href: teaching.qmd
+        text: "Teaching"
+      - href: contact.qmd
+        text: Contact
+      - href: "papers/CV 2025.pdf"
+        text: "CV"
+      
+    tools:
+      - text: "IDEAS"
+        icon: lightbulb
+        href: https://ideas.repec.org/f/pro836.html
+      - text: "Google Scholar"
+        icon: book
+        href: https://scholar.google.com/citations?user=WdWmafsAAAAJ&hl=fr
+
+
+format:
+  html:
+    grid:
+      margin-width: 300px
+    page-layout: full
+    theme: zephyr
+    css: styles.css
+    toc: false
+
+editor: visual
+

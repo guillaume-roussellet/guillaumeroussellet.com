@@ -1,0 +1,12 @@
+---
+title: "Contact Details"
+---
+:::: g-col-8
+
+
+<!-- 1001 Sherbrooke St. West,\ --> <!-- Montreal, QC H3A 1G5,\ --> <!-- Bronfman building, Office 555\ --> <!-- CANADA\ --> 33 Liberty St, 4th floor, New York, NY 10045, USA\
+
+$\rightarrow$ <a href="mailto:guillaume.roussellet@ny.frb.org">guillaume.roussellet\[at\]ny.frb.org</a>\
+$\rightarrow$ <a href="mailto:guillaume.roussellet@mcgill.ca">guillaume.roussellet\[at\]mcgill.ca</a>\
+
+::::

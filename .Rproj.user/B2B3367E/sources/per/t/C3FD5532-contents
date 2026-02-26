@@ -1,0 +1,3789 @@
+---
+title: "Regressions second round"
+author: "G. Roussellet"
+date: "2023-04-28"
+output:
+  rmdformats::readthedown
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
+library(tidyverse)
+```
+
+# Regressions {.tabset}
+
+We present regressions of the type: $$
+   \Delta^k\mathrm{ILSBEI}_t(n) = \alpha_n + \beta_n \times \Delta^k\mathrm{CDS}_t+\varepsilon_t(n)\,,
+$$ where $n$ is the maturity, and $CDS_t$ is the level of the
+EUR-denominated CDS We estimate this regression for $k\in\{0,1\}$, i.e.
+level-level and diff-diff. All standard deviations are computed with
+Newey-West using an automatically selected number of lags.
+
+## Basic regressions {.tabset}
+
+```{r loading data, cache = T}
+rm(list=ls())
+
+# loading useful libraries
+#=========================
+library(readxl)
+library(vars)
+library(lubridate)
+library(tidyverse)
+
+# Correct Rsq of ivreg
+Rsq_iv <- function(ivregression, endo){
+  result <- 1 - 
+    sum(ivregression$residuals2^2)/sum((endo - mean(endo))^2)
+}
+
+# Selection of case
+sample_start    <- "2005-01-01"
+sample_end      <- "2020-12-31"
+
+# Loading Data
+#=============
+path_DB <- "C:/Users/grouss10/Dropbox/"
+#path_DB <- "D:/Dropbox/"
+
+US_data <- read_excel(
+    paste0(path_DB,"Dittmar_Hsu_Simasek/Data/Updated_vars.xlsx"),
+    sheet = "stata")
+
+US_data <- US_data %>%
+  mutate(year_month = as.yearmon(date))
+
+US_data <- US_data %>% 
+  mutate(across(3:23, ~as.numeric(.x)))
+
+US_data[US_data==0] <- NA
+
+US_data <- US_data %>%
+  arrange(date) %>%
+  mutate(across(c(1:23), ~zoo::na.locf(.x, na.rm = F)))
+
+US_data <- US_data %>%
+  group_by(year_month) %>%
+  dplyr::summarize(across(c(1:23), ~last(.x)))
+
+
+
+CDS_data <- read.csv(paste0(path_DB, "Dittmar_Hsu_Simasek/Data/MarkitUSCDSRaw.csv"))
+CDS_data <- CDS_data %>%
+  dplyr::select(date, ccy, docclause, spread1y, spread2y, spread3y, spread5y, spread7y,spread10y)
+CDS_data <- CDS_data %>% 
+  mutate(date = as.Date(paste0(substr(date,1,4),"-",substr(date,5,6),"-",substr(date,7,8))))
+CDS_data <- CDS_data %>% 
+  mutate(year_month = as.yearmon(date)) %>% as_tibble()
+CDS_data <- CDS_data %>% 
+  arrange(date) %>%
+  group_by(ccy, docclause) %>%
+  mutate(across(spread1y:year_month, ~zoo::na.locf(.x, na.rm = F)))
+CDS_data_monthly <- CDS_data %>%
+  group_by(year_month, ccy, docclause) %>%
+  summarize(spread1y = last(spread1y), 
+            spread2y = last(spread2y), 
+            spread3y = last(spread3y), 
+            spread5y = last(spread5y), 
+            spread7y = last(spread7y),
+            spread10y = last(spread10y))
+
+CDS_data_monthly <- CDS_data_monthly %>%
+  filter(ccy == "EUR", docclause == "CR")
+
+Total_US_data <- US_data %>% left_join(CDS_data_monthly, by = "year_month")
+
+Total_US_data <- Total_US_data %>%
+  filter(year_month >= "Jun 2005")
+
+#names(US_data)[24] <-   "US_CDS_5yr_EUR_bps"
+  
+UK_data <- read_excel(
+  paste0(path_DB,"Dittmar_Hsu_Simasek/VARand2SLS/data/empirical_vars_monthly3.xlsx"), 
+  sheet = "uk_monthly")
+
+
+# Reducing the sample
+#====================
+#US_dates_used <- ymd(apply(US_data[,1:3],1, function(x){paste(x, collapse=' ')}))
+UK_dates_used <- ymd(apply(UK_data[,1:3],1, function(x){paste(x, collapse=' ')}))
+
+#US_data <- US_data[(US_dates_used >= sample_start & US_dates_used <= sample_end), ]
+UK_data <- UK_data[(UK_dates_used >= sample_start & UK_dates_used <= sample_end), ]
+
+# Select Data for VAR
+#====================
+Total_US_data <- Total_US_data %>%
+  mutate(ILSBEI2 = swap2 - (tsy2 - tips2),
+         ILSBEI3 = swap3 - (tsy3 - tips3),
+         ILSBEI5 = swap5 - (tsy5 - tips5),
+         ILSBEI7 = swap7 - (tsy7 - tips7),
+         ILSBEI10 = swap10 - (tsy10 - tips10),
+         cds5 = 100*spread5y)
+
+
+Total_US_data <- Total_US_data %>% rename(EUR_CDS = uscds_5yr_eur_cr)
+Total_US_data <- Total_US_data %>% mutate(EUR_CDS = 100*EUR_CDS,
+                              cds2 = 100*spread2y,
+                              cds3 = 100*spread3y,
+                              cds7 = 100*spread7y,
+                              cds10 = 100*spread10y)
+Total_US_data <- Total_US_data %>% mutate(log_CDS = log(EUR_CDS))
+US_data <- Total_US_data %>%
+  dplyr::select(-spread2y, -spread3y, -spread5y, -spread7y, - spread10y, 
+                -ccy, - docclause, - date)
+
+
+
+```
+
+```{r load data fred, cache = T}
+require(fredr)
+require(purrr)
+require(dplyr)
+fredr_set_key("2efb04c5be2c6e51c6fe7d907082adfc")
+params <- list(
+    series_id = c("CPIAUCNS", #CPI
+                  "BAMLC0A4CBBB", #BBB Corp OAS
+                  "BAMLC0A1CAAA", #AAA Corp OAS
+                  "BAMLC0A2CAA", #AA corp OAS
+                  "AAA10Y", #Moody's Aaa - 10y
+                  "BAA10Y" # Moody's Baa - 10y
+                  
+    ),
+    observation_start = as.Date("1990-01-01"),
+    observation_end = Sys.Date(), frequency = "m",
+    aggregation_method = "eop")
+Macro_data <- purrr::pmap_dfr(
+    .l = params,
+    .f = ~ fredr(series_id = ..1, observation_start = ..2, 
+                 observation_end = ..3, frequency = ..4,
+                 aggregation_method = ..5))
+
+Macro_data <- Macro_data %>%
+    dplyr::select(date, series_id, value) %>% 
+  pivot_wider(names_from=series_id) %>%
+  rename(CPI = CPIAUCNS,
+         BoFa_BBB_OAS = BAMLC0A4CBBB,
+         BoFa_AAA_OAS = BAMLC0A1CAAA,
+         BoFa_AA_OAS = BAMLC0A2CAA) %>%
+  mutate(inflation_yoy = 100*(log(CPI) - dplyr::lag(log(CPI), 12)),
+         inflation_month = 100*(log(CPI) - dplyr::lag(log(CPI), 1)))
+
+
+# Quarterly series
+params2 <- list(
+    series_id = c("GFDEGDQ188S", #Debt to GDP ratio 
+                  "GDPC1" # Real GDP
+                  
+    ),
+    observation_start = as.Date("1990-01-01"),
+    observation_end = Sys.Date(), frequency = "q",
+    aggregation_method = "eop")
+
+Macro_data_quarter <- purrr::pmap_dfr(
+    .l = params2,
+    .f = ~ fredr(series_id = ..1, observation_start = ..2, 
+                 observation_end = ..3, frequency = ..4,
+                 aggregation_method = ..5))
+
+Macro_data_quarter <- Macro_data_quarter %>%
+  dplyr::select(date, series_id, value) %>%
+  pivot_wider(names_from = series_id) %>%
+  rename(Debt_to_GDP = GFDEGDQ188S,
+         Real_GDP = GDPC1)
+
+Macro_data_quarter <- Macro_data_quarter %>%
+  mutate(real_GDP_growth_yoy = 100*(log(Real_GDP) - dplyr::lag(log(Real_GDP),4)),
+         real_GDPDebt_growth_yoy = 100*(log(Debt_to_GDP) - dplyr::lag(log(Debt_to_GDP),4))) 
+# lag data one quarter
+Macro_data_quarter <- Macro_data_quarter %>%
+  mutate_if(is.numeric, dplyr::lag)
+
+Macro_data_quarter <- Macro_data %>% dplyr::select(date) %>%
+  full_join(Macro_data_quarter)
+Macro_data_quarter <- Macro_data_quarter %>%
+  mutate(year_qtr = as.yearqtr(date),
+         year_month = as.yearmon(date))
+Macro_data_quarter <- Macro_data_quarter %>%
+  group_by(year_qtr) %>%
+  mutate(Debt_to_GDP = mean(Debt_to_GDP, na.rm = T),
+         Real_GDP = mean(Real_GDP, na.rm = T),
+         real_GDP_growth_yoy  = mean(real_GDP_growth_yoy, na.rm = T),
+         real_GDPDebt_growth_yoy = mean(real_GDPDebt_growth_yoy, na.rm = T))
+  
+  
+#Join data
+Full_macro_data <- Macro_data %>%
+  full_join(Macro_data_quarter) %>%
+  dplyr::select(-date, - year_qtr) 
+
+
+# Outstanding data
+Debt_outstanding_data <- read.csv(paste0(path_DB,"Dittmar_Hsu_Simasek\\Revision - JF II\\Guillaume\\MSPD_SumSecty_20010131_20230430.csv")) %>%
+  as_tibble()
+Debt_outstanding_data <- Debt_outstanding_data %>% arrange(Record.Date)
+
+Debt_outstanding_data <- Debt_outstanding_data %>% 
+  group_by(Record.Date, Security.Type.Description, Security.Class.Description) %>%
+  summarize(Debt_held_public = sum(Total.Public.Debt.Outstanding..in.Millions.))
+
+Total_TIPS_outsanding <- Debt_outstanding_data %>%
+  filter(Security.Type.Description == "Marketable", 
+         Security.Class.Description %in% c("Inflation-Indexed Bonds", "Inflation-Indexed Notes", "Treasury Inflation-Protected Securities")) %>% 
+  group_by(Record.Date) %>%
+  summarize(TIPS_outstanding = sum(Debt_held_public))
+
+Total_debt_outstanding <- Debt_outstanding_data %>%
+  filter(Security.Type.Description == "Total Marketable")
+
+Full_outstanding_data <- Total_debt_outstanding %>% 
+  full_join(Total_TIPS_outsanding) %>%
+  ungroup() %>%
+  dplyr::select(-Security.Type.Description, -Security.Class.Description)
+
+Full_outstanding_data <- Full_outstanding_data %>%
+  mutate(TIPS_growth = 100*(log(TIPS_outstanding) - dplyr::lag(log(TIPS_outstanding), 1)),
+         TIPS_growth_yoy = 100*(log(TIPS_outstanding) - dplyr::lag(log(TIPS_outstanding), 12)),
+         Debt_growth = 100*(log(Debt_held_public ) - dplyr::lag(log(Debt_held_public) , 1)),
+         Debt_growth_yoy = 100*(log(Debt_held_public ) - dplyr::lag(log(Debt_held_public) , 12)),
+         year_month = as.yearmon(Record.Date)) %>%
+  dplyr::select(-Record.Date)
+
+
+
+```
+
+```{r joining all data, cache =T}
+US_data <- US_data %>% left_join(Full_macro_data)
+US_data <- US_data %>% left_join(Full_outstanding_data)
+
+US_data <- US_data %>% 
+  mutate(BAA_AAA = BAA10Y - AAA10Y,
+         TIPS_ratio = TIPS_outstanding/Debt_held_public,
+         Off_On_run = tsy10 - ontr_10yr )
+
+```
+
+### Full Sample (2005 - 2019) {.tabset}
+
+#### Levels{.tabset}
+
+##### No Controls
+
+```{r simple regression, cache = T}
+library(stargazer)
+library(sandwich)
+
+lm2 <- lm(ILSBEI2 ~ EUR_CDS, data = US_data)
+lm3 <- lm(ILSBEI3 ~ EUR_CDS, data = US_data)
+lm5 <- lm(ILSBEI5 ~ EUR_CDS, data = US_data)
+lm7 <- lm(ILSBEI7 ~ EUR_CDS, data = US_data)
+lm10 <- lm(ILSBEI10 ~ EUR_CDS, data = US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser")
+          )
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+
+
+lm2 <- lm(ILSBEI2 ~ cds2, data = US_data)
+lm3 <- lm(ILSBEI3 ~ cds3, data = US_data)
+lm5 <- lm(ILSBEI5 ~ cds5, data = US_data)
+lm7 <- lm(ILSBEI7 ~ cds7, data = US_data)
+lm10 <- lm(ILSBEI10 ~ cds10, data = US_data)
+
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on maturity-matched CDS levels",
+          omit.stat = c("f", "ser")
+          )
+
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+
+
+
+lm2 <- lm(ILSBEI2 ~ Debt_growth, data = US_data)
+lm3 <- lm(ILSBEI3 ~ Debt_growth, data = US_data)
+lm5 <- lm(ILSBEI5 ~ Debt_growth, data = US_data)
+lm7 <- lm(ILSBEI7 ~ Debt_growth, data = US_data)
+lm10 <- lm(ILSBEI10 ~ Debt_growth, data = US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on debt growth",
+          omit.stat = c("f", "ser")
+          )
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+
+lm2 <- lm(ILSBEI2 ~ Debt_growth_yoy, data = US_data)
+lm3 <- lm(ILSBEI3 ~ Debt_growth_yoy, data = US_data)
+lm5 <- lm(ILSBEI5 ~ Debt_growth_yoy, data = US_data)
+lm7 <- lm(ILSBEI7 ~ Debt_growth_yoy, data = US_data)
+lm10 <- lm(ILSBEI10 ~ Debt_growth_yoy, data = US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on yoy debt growth",
+          omit.stat = c("f", "ser")
+          )
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+
+
+
+
+```
+
+##### Non-transformed Controls
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+```{r regression with controls full sample, cache = T}
+library(stargazer)
+lm2 <- lm(ILSBEI5 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm3 <- lm(ILSBEI5 ~ AAA10Y + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm5 <- lm(ILSBEI5 ~ BAA10Y + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm7 <- lm(ILSBEI5 ~ BAA_AAA + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm10 <- lm(ILSBEI5 ~ inflation_month + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm11 <- lm(ILSBEI5 ~ Debt_to_GDP + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm12 <- lm(ILSBEI5 ~ TIPS_growth_yoy + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm13 <- lm(ILSBEI5 ~ Debt_growth_yoy + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm14 <- lm(ILSBEI5 ~ TIPS_ratio + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm15 <- lm(ILSBEI5 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+# lm20 <- lm(ILSBEI5 ~ EUR_CDS + AAA10Y + BAA_AAA + inflation_month + Debt_to_GDP + TIPS_growth_yoy+ Debt_growth_yoy+ TIPS_ratio + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+
+stargazer(list(lm2, lm3, lm5, lm7, lm10, lm11, lm12, lm13, lm14, lm15), type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10))),
+            sqrt(diag(NeweyWest(lm11))),
+            sqrt(diag(NeweyWest(lm12))),
+            sqrt(diag(NeweyWest(lm13))),
+            sqrt(diag(NeweyWest(lm14))),
+            sqrt(diag(NeweyWest(lm15)))
+            ),
+          title = "Regressions of ILSBEI on controls",
+          omit.stat = c("f", "ser")
+          )
+
+
+
+cor_mat <- US_data %>% dplyr::select(EUR_CDS, AAA10Y, BAA_AAA, inflation_month, Debt_to_GDP, TIPS_ratio, vix, libor_ois, hpw_noise, tips_noise, Off_On_run, TIPS_growth_yoy, Debt_growth_yoy, Debt_growth) %>% cor() 
+cor_mat[upper.tri(cor_mat, diag=T)] <- NA
+  
+options(knitr.kable.NA = '')
+cor_mat %>% knitr::kable(digits=3, caption = "Correlation matrix")
+
+par(mfrow=c(2,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (1)")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (2)")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (3)")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (4)")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (5)")
+plot(acf(lm11$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (6)")
+plot(acf(lm12$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (7)")
+plot(acf(lm13$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (8)")
+plot(acf(lm14$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (9)")
+plot(acf(lm15$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (10)")
+
+
+```
+
+##### Transformed controls
+
+```{r transformed controls basics, cache = T}
+US_data <- US_data %>%
+  mutate(res_vix_debt        = lm(vix ~ Debt_growth)$residual,
+         res_libor_ois_debt  = lm(libor_ois ~ Debt_growth)$residual,
+         res_hpw_noise_debt  = lm(hpw_noise ~ Debt_growth)$residual,
+         res_tips_noise_debt = lm(tips_noise ~ Debt_growth)$residual,
+         res_Off_On_run_debt = lm(Off_On_run ~ Debt_growth)$residual,
+         res_vix_CDS         = lm(vix ~ EUR_CDS)$residual,
+         res_libor_ois_CDS   = lm(libor_ois ~ EUR_CDS)$residual,
+         res_hpw_noise_CDS   = lm(hpw_noise ~ EUR_CDS)$residual,
+         res_tips_noise_CDS  = lm(tips_noise ~ EUR_CDS)$residual,
+         res_Off_On_run_CDS  = lm(Off_On_run ~ EUR_CDS)$residual)
+
+
+library(stargazer)
+lm2 <- lm(ILSBEI5 ~ EUR_CDS + res_vix_CDS + res_libor_ois_CDS + res_hpw_noise_CDS + res_tips_noise_CDS + res_Off_On_run_CDS, data = US_data)
+lm3 <- lm(ILSBEI3 ~ EUR_CDS + res_vix_CDS + res_libor_ois_CDS + res_hpw_noise_CDS + res_tips_noise_CDS + res_Off_On_run_CDS, data = US_data)
+lm5 <- lm(ILSBEI5 ~ EUR_CDS + res_vix_CDS + res_libor_ois_CDS + res_hpw_noise_CDS + res_tips_noise_CDS + res_Off_On_run_CDS, data = US_data)
+lm7 <- lm(ILSBEI7 ~ EUR_CDS + res_vix_CDS + res_libor_ois_CDS + res_hpw_noise_CDS + res_tips_noise_CDS + res_Off_On_run_CDS, data = US_data)
+lm10 <- lm(ILSBEI10 ~ EUR_CDS + res_vix_CDS + res_libor_ois_CDS + res_hpw_noise_CDS + res_tips_noise_CDS + res_Off_On_run_CDS, data = US_data)
+
+stargazer(list(lm2, lm3, lm5, lm7, lm10), type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on orthogonalized controls",
+          omit.stat = c("f", "ser")
+          )
+
+lm2 <- lm(ILSBEI2 ~ Debt_growth + res_vix_debt + res_libor_ois_debt + res_hpw_noise_debt + res_tips_noise_debt + res_Off_On_run_debt, data = US_data)
+lm3 <- lm(ILSBEI3 ~ Debt_growth + res_vix_debt + res_libor_ois_debt + res_hpw_noise_debt + res_tips_noise_debt + res_Off_On_run_debt, data = US_data)
+lm5 <- lm(ILSBEI5 ~ Debt_growth + res_vix_debt + res_libor_ois_debt + res_hpw_noise_debt + res_tips_noise_debt + res_Off_On_run_debt, data = US_data)
+lm7 <- lm(ILSBEI7 ~ Debt_growth + res_vix_debt + res_libor_ois_debt + res_hpw_noise_debt + res_tips_noise_debt + res_Off_On_run_debt, data = US_data)
+lm10 <- lm(ILSBEI10 ~ Debt_growth + res_vix_debt + res_libor_ois_debt + res_hpw_noise_debt + res_tips_noise_debt + res_Off_On_run_debt, data = US_data)
+
+stargazer(list(lm2, lm3, lm5, lm7, lm10), type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on orthogonalized controls",
+          omit.stat = c("f", "ser")
+          )
+
+
+
+
+```
+
+#### First difference{.tabset}
+
+##### No Controls
+
+```{r first diff, cache = T}
+library(stargazer)
+library(sandwich)
+
+lm2 <- lm(diff(ILSBEI2) ~ diff(EUR_CDS), data = US_data)
+lm3 <- lm(diff(ILSBEI3) ~ diff(EUR_CDS), data = US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(EUR_CDS), data = US_data)
+lm7 <- lm(diff(ILSBEI7) ~ diff(EUR_CDS), data = US_data)
+lm10 <- lm(diff(ILSBEI10) ~ diff(EUR_CDS), data = US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser")
+          )
+
+
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+# lm2 <- lm(diff(ILSBEI2) ~ diff(log_CDS), data = US_data)
+# lm3 <- lm(diff(ILSBEI3) ~ diff(log_CDS), data = US_data)
+# lm5 <- lm(diff(ILSBEI5) ~ diff(log_CDS), data = US_data)
+# lm7 <- lm(diff(ILSBEI7) ~ diff(log_CDS), data = US_data)
+# lm10 <- lm(diff(ILSBEI10) ~ diff(log_CDS), data = US_data)
+# stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+#           se = list(
+#             sqrt(diag(NeweyWest(lm2))),
+#             sqrt(diag(NeweyWest(lm3))),
+#             sqrt(diag(NeweyWest(lm5))),
+#             sqrt(diag(NeweyWest(lm7))),
+#             sqrt(diag(NeweyWest(lm10)))
+#             ),
+#           title = "Regressions of ILSBEI on 5y EUR denominated log-CDS"
+#           )
+
+
+lm2 <- lm(diff(ILSBEI2) ~ diff(cds2), data = US_data)
+lm3 <- lm(diff(ILSBEI3) ~ diff(cds3), data = US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(cds5), data = US_data)
+lm7 <- lm(diff(ILSBEI7) ~ diff(cds7), data = US_data)
+lm10 <- lm(diff(ILSBEI10) ~ diff(cds10), data = US_data)
+
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on maturity-matched CDS levels",
+          omit.stat = c("f", "ser")
+          )
+
+
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+
+
+lm2 <- lm(diff(ILSBEI2) ~ diff(Debt_growth), data = US_data)
+lm3 <- lm(diff(ILSBEI3) ~ diff(Debt_growth), data = US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(Debt_growth), data = US_data)
+lm7 <- lm(diff(ILSBEI7) ~ diff(Debt_growth), data = US_data)
+lm10 <- lm(diff(ILSBEI10) ~ diff(Debt_growth), data = US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on debt growth",
+          omit.stat = c("f", "ser")
+          )
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+
+lm2 <- lm(diff(ILSBEI2) ~ diff(Debt_growth_yoy), data = US_data)
+lm3 <- lm(diff(ILSBEI3) ~ diff(Debt_growth_yoy), data = US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(Debt_growth_yoy), data = US_data)
+lm7 <- lm(diff(ILSBEI7) ~ diff(Debt_growth_yoy), data = US_data)
+lm10 <- lm(diff(ILSBEI10) ~ diff(Debt_growth_yoy), data = US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on yoy debt growth",
+          omit.stat = c("f", "ser")
+          )
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+
+
+```
+
+##### Non-transformed Controls
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+```{r regression first diff controls, cache = T}
+diff <- function(x){x - dplyr::lag(x)}
+lm2 <- lm(diff(ILSBEI5) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm3 <- lm(diff(ILSBEI5) ~ diff(AAA10Y) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(BAA10Y) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm7 <- lm(diff(ILSBEI5) ~ diff(BAA_AAA) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm10 <- lm(diff(ILSBEI5) ~ inflation_month + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm11 <- lm(diff(ILSBEI5) ~ diff(Debt_to_GDP) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm12 <- lm(diff(ILSBEI5) ~ TIPS_growth_yoy + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm13 <- lm(diff(ILSBEI5) ~ Debt_growth_yoy + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm14 <- lm(diff(ILSBEI5) ~ diff(TIPS_ratio) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm15 <- lm(diff(ILSBEI5) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+# lm20 <- lm(diff(ILSBEI5) ~ diff(EUR_CDS) + diff(AAA10Y) + diff(BAA_AAA) + inflation_month + diff(Debt_to_GDP) + TIPS_growth_yoy+ Debt_growth_yoy + diff(TIPS_ratio) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+
+stargazer(lm2, lm3, lm5, lm7, lm10, lm11, lm12, lm13, lm14, lm15, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10))),
+            sqrt(diag(NeweyWest(lm11))),
+            sqrt(diag(NeweyWest(lm12))),
+            sqrt(diag(NeweyWest(lm13))),
+            sqrt(diag(NeweyWest(lm14))),
+            sqrt(diag(NeweyWest(lm15)))
+            ),
+          title = "Regressions of 5y ILSBEI on controls",
+          omit.stat = c("f", "ser")
+          )
+
+cor_mat <- US_data %>% dplyr::select(EUR_CDS, AAA10Y, BAA_AAA, inflation_month, Debt_to_GDP, TIPS_ratio, vix, libor_ois, hpw_noise, tips_noise, Off_On_run, TIPS_growth_yoy, Debt_growth_yoy, Debt_growth) %>% 
+  mutate(across(1:11, ~ diff(.x)))  %>%
+  cor(use="pairwise.complete") 
+cor_mat[upper.tri(cor_mat, diag=T)] <- NA
+  
+options(knitr.kable.NA = '')
+cor_mat %>% knitr::kable(digits=3, caption = "Correlation matrix")
+
+par(mfrow=c(2,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (1)")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (2)")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (3)")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (4)")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (5)")
+plot(acf(lm11$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (6)")
+plot(acf(lm12$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (7)")
+plot(acf(lm13$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (8)")
+plot(acf(lm14$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (9)")
+plot(acf(lm15$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (10)")
+```
+
+##### Transformed Controls
+
+```{r regression basics transformed controls first diff, cache = T}
+
+library(stargazer)
+lm2 <- lm(diff(ILSBEI5) ~ diff(EUR_CDS) + diff(res_vix_CDS) + diff(res_libor_ois_CDS) + diff(res_hpw_noise_CDS) + diff(res_tips_noise_CDS) + diff(res_Off_On_run_CDS), data = US_data)
+lm3 <- lm(diff(ILSBEI3) ~ diff(EUR_CDS) + diff(res_vix_CDS) + diff(res_libor_ois_CDS) + diff(res_hpw_noise_CDS) + diff(res_tips_noise_CDS) + diff(res_Off_On_run_CDS), data = US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(EUR_CDS) + diff(res_vix_CDS) + diff(res_libor_ois_CDS) + diff(res_hpw_noise_CDS) + diff(res_tips_noise_CDS) + diff(res_Off_On_run_CDS), data = US_data)
+lm7 <- lm(diff(ILSBEI7) ~ diff(EUR_CDS) + diff(res_vix_CDS) + diff(res_libor_ois_CDS) + diff(res_hpw_noise_CDS) + diff(res_tips_noise_CDS) + diff(res_Off_On_run_CDS), data = US_data)
+lm10 <- lm(diff(ILSBEI10) ~ diff(EUR_CDS) + diff(res_vix_CDS) + diff(res_libor_ois_CDS) + diff(res_hpw_noise_CDS) + diff(res_tips_noise_CDS) + diff(res_Off_On_run_CDS), data = US_data)
+
+stargazer(list(lm2, lm3, lm5, lm7, lm10), type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on orthogonalized controls",
+          omit.stat = c("f", "ser")
+          )
+
+lm2 <- lm(diff(ILSBEI2) ~ Debt_growth + diff(res_vix_debt) + diff(res_libor_ois_debt) + diff(res_hpw_noise_debt) + diff(res_tips_noise_debt) + diff(res_Off_On_run_debt), data = US_data)
+lm3 <- lm(diff(ILSBEI3) ~Debt_growth + diff(res_vix_debt) + diff(res_libor_ois_debt) + diff(res_hpw_noise_debt) + diff(res_tips_noise_debt) + diff(res_Off_On_run_debt), data = US_data)
+lm5 <- lm(diff(ILSBEI5) ~ Debt_growth + diff(res_vix_debt) + diff(res_libor_ois_debt) + diff(res_hpw_noise_debt) + diff(res_tips_noise_debt) + diff(res_Off_On_run_debt), data = US_data)
+lm7 <- lm(diff(ILSBEI7) ~ Debt_growth + diff(res_vix_debt) + diff(res_libor_ois_debt) + diff(res_hpw_noise_debt) + diff(res_tips_noise_debt) + diff(res_Off_On_run_debt), data = US_data)
+lm10 <- lm(diff(ILSBEI10) ~ Debt_growth + diff(res_vix_debt) + diff(res_libor_ois_debt) + diff(res_hpw_noise_debt) + diff(res_tips_noise_debt) + diff(res_Off_On_run_debt), data = US_data)
+
+stargazer(list(lm2, lm3, lm5, lm7, lm10), type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on orthogonalized controls",
+          omit.stat = c("f", "ser")
+          )
+
+```
+
+<!-- #### Cumulant-based EIV (Pal 1980) -->
+
+<!-- This estimation is based on derivatives of the joint cumulant generating function, according to Pal (1980). We could also implement that of Erickson and Whited (2003) but it seems more complicated. In addition, I do not know how these estimators behave in the case of serially correlated errors.  -->
+
+<!-- ```{r cumulant based estimation, cache = T} -->
+
+<!-- library(numDeriv) -->
+
+<!-- joint_CGF <- function(vec, y_data, x_data){ -->
+
+<!--   result <- log( -->
+
+<!--     mean( -->
+
+<!--       exp( -->
+
+<!--         vec[1] * x_data + vec[2] * y_data -->
+
+<!--       ) -->
+
+<!--     ) -->
+
+<!--   ) -->
+
+<!--   return(result) -->
+
+<!-- } -->
+
+<!-- diff_CGF <- function(vec, y_data, x_data){ -->
+
+<!--   require(numDeriv) -->
+
+<!--   result <- jacobian(func = joint_CGF, x = vec,  -->
+
+<!--                      y_data = y_data,  -->
+
+<!--                      x_data = x_data) -->
+
+<!--   return(result) -->
+
+<!-- } -->
+
+<!-- Hess_CGF <- function(vec, y_data, x_data){ -->
+
+<!--   require(numDeriv) -->
+
+<!--     result <- hessian(func = joint_CGF, x = vec,  -->
+
+<!--                      y_data = y_data,  -->
+
+<!--                      x_data = x_data) -->
+
+<!--   return(result) -->
+
+<!-- } -->
+
+<!-- Total_estimator <- function(vec, y_data, x_data){ -->
+
+<!--   require(numDeriv) -->
+
+<!--   final_deriv <- jacobian(func = Hess_CGF, x = vec,  -->
+
+<!--                      y_data = y_data,  -->
+
+<!--                      x_data = x_data) -->
+
+<!--   final_estimators <- c( -->
+
+<!--     final_deriv[4,1]/final_deriv[1,2], -->
+
+<!--     final_deriv[4,2]/final_deriv[4,1], -->
+
+<!--     final_deriv[1,2]/final_deriv[1,1] -->
+
+<!--   ) -->
+
+<!--   return(final_estimators) -->
+
+<!-- } -->
+
+<!-- estimates <- cbind( -->
+
+<!--   Total_estimator(c(0,0), y_data = US_data$ILSBEI2, x_data = US_data$EUR_CDS), -->
+
+<!--   Total_estimator(c(0,0), y_data = US_data$ILSBEI3, x_data = US_data$EUR_CDS), -->
+
+<!--   Total_estimator(c(0,0), y_data = US_data$ILSBEI5, x_data = US_data$EUR_CDS), -->
+
+<!--   Total_estimator(c(0,0), y_data = US_data$ILSBEI7, x_data = US_data$EUR_CDS), -->
+
+<!--   Total_estimator(c(0,0), y_data = US_data$ILSBEI10, x_data = US_data$EUR_CDS)) -->
+
+<!-- estimates <- data.frame(estimates, row.names = c("K12/K21", "K03/K12","K21/K30")) -->
+
+<!-- names(estimates) <- paste0("ILSBEI", c(2,3,5,7,10)) -->
+
+<!-- print(estimates, digits = 3) -->
+
+<!-- ``` -->
+
+#### GMM with skew
+
+We consider the following model: $$
+    \Delta^k\mathrm{ILSBEI}_t(n) = \alpha_n + \beta_n \times \Delta^k\mathrm{PD}_t+\varepsilon_t(n)\,,
+$$ and we assume that the PD is incorrectly measured by the 5y CDS, such
+that: $$
+  \mathrm{CDS}_t = \mathrm{PD}_t + \eta_t\,,
+$$ where $\eta_t$ has mean $a$ such that the CDS is an biased measure of
+the PD. We can think about $\eta_t$ as pure measurement error or a
+risk-premium, or both.
+
+For simplicity, we denote by $y_t$ the ILSBEI, $x_t$ the CDS and $X_t$
+the PD. The usual OLS (biased) estimator is based on the following
+moment conditions: $$
+  \begin{array}{rcl}
+    \mathbb{E}\left(x_t \right) &=& \mathbb{E}\left(X_t \right) + a\\
+    \mathbb{E}\left(y_t \right) &=& \alpha + \beta\, \mathbb{E}\left(X_t \right) \\
+    \mathbb{E}\left(x_t^2 \right) &=& \mathbb{E}\left(X_t^2 \right) + 2a\mathbb{E}\left(X_t \right)+\sigma_\eta^2 + a^2 \\
+    \mathbb{E}\left(y_t^2 \right) &=& \alpha^2 + \beta^2\mathbb{E}\left(X_t^2 \right)+\sigma_\varepsilon^2+2\alpha\beta\,\mathbb{E}\left(X_t \right)\\
+    \mathbb{E}\left(x_ty_t \right) &=& \alpha\,\mathbb{E}\left(X_t + a \right)+\beta\,\left[\mathbb{E}\left(X_t^2 \right)+a\mathbb{E}\left(X_t \right)\right]
+  \end{array}
+$$ Or, using the notation
+$\mu_{X}^{(i)} := \mathbb{E}\left(X_t^i \right)$: $$
+  \begin{array}{rcl}
+    \mathbb{E}\left(x_t \right) &=& \mu_{X}^{(1)} + a\\
+    \mathbb{E}\left(y_t \right) &=& \alpha + \beta\, \mu_{X}^{(1)} \\
+    \mathbb{E}\left(x_t^2 \right) &=& \mu_{X}^{(2)} + 2a\,\mu_{X}^{(1)}+\sigma_\eta^2 + a^2 \\
+    \mathbb{E}\left(y_t^2 \right) &=& \alpha^2 + \beta^2\mu_{X}^{(2)}+\sigma_\varepsilon^2+2\alpha\beta\,\mu_{X}^{(1)}\\
+    \mathbb{E}\left(x_ty_t \right) &=& \alpha a + (\alpha+\beta a)\mu_{X}^{(1)} + \beta \mu_{X}^{(2)}
+  \end{array}
+$$ There are 7 unknowns on the right-hand side:
+$\{\alpha, \beta,\sigma_\eta,\sigma_\varepsilon,a, \mu_X^{(1)}, \mu_X^{(2)}\}$.
+However, there are only 5 estimating equations. We add third-order
+moments: $$
+  \begin{array}{rcl}
+    \mathbb{E}\left(x_t^3 \right)  &=& \mu_X^{(3)}  + 3a\mu_X^{(2)}+3(\sigma_\eta^2 + a^2)\mu_X^{(1)} + a^3 + \mathcal{S}_\eta+3a\sigma_\eta^2\\
+    \mathbb{E}\left(y_t^3 \right)  &=& \alpha^3 + 3 \alpha^2\beta\mu_X^{(1)} + 3\alpha\beta^2\mu_X^{(2)} + \beta^3\mu_X^{(3)} + 3\left(\alpha + \beta\mu_X^{(1)}\right)\sigma_\varepsilon^2+ \mathcal{S}_\varepsilon\\
+    \mathbb{E}\left(x_t^2y_t \right)  &=& \left(\alpha+\beta\mu_X^{(1)}\right)\left(a^2 + \sigma_\eta^2\right)+2a\left(\alpha \mu_X^{(1)} + \beta\mu_X^{(2)}\right)+\alpha \mu_X^{(2)} + \beta \mu_X^{(3)}\\
+    \mathbb{E}\left(x_ty_t^2 \right)  &=& \sigma_\varepsilon^2\left(\mu_X^{(1)} + a\right)+a\left(\alpha^2+ 2\alpha\beta\mu_X^{(1)} + \beta^2\mu_X^{(2)}\right) + \alpha^2\mu_X^{(1)} + 2\alpha\beta\mu_X^{(2)} + \beta^2\mu_X^{(3)}
+  \end{array}
+$$ The case of Geary (1942) can be found by assuming $a=0$, and that the
+residuals are symmetric. Here, notice that we still do not achieve
+identification because the above equations add three unknown skewness
+parameters:
+$\{\mu_X^{(3)},\,\mathcal{S}_\varepsilon,\, \mathcal{S}_\eta\}$. Since
+$a$ does not seem to be identified, we suppress it from the above
+equations. We end up with the following just-identified moment system:
+$$
+  \begin{array}{rcl}
+    \mathbb{E}\left(x_t \right) &=& \mu_{X}^{(1)} \\
+    \mathbb{E}\left(y_t \right) &=& \alpha + \beta\, \mu_{X}^{(1)} \\
+    \mathbb{E}\left(x_t^2 \right) &=& \mu_{X}^{(2)} + \sigma_\eta^2 \\
+    \mathbb{E}\left(y_t^2 \right) &=& \alpha^2 + \beta^2\mu_{X}^{(2)} +2\alpha\beta\,\mu_{X}^{(1)} +\sigma_\varepsilon^2\\
+    \mathbb{E}\left(x_ty_t \right) &=&  \alpha\mu_{X}^{(1)} + \beta \mu_{X}^{(2)}\\
+     \mathbb{E}\left(x_t^3 \right)  &=& \mu_X^{(3)}  +3\sigma_\eta^2 \mu_X^{(1)} + \mathcal{S}_\eta\\
+    \mathbb{E}\left(y_t^3 \right)  &=& \alpha^3 + 3 \alpha^2\beta\mu_X^{(1)} + 3\alpha\beta^2\mu_X^{(2)} + \beta^3\mu_X^{(3)} + 3\left(\alpha + \beta\mu_X^{(1)}\right)\sigma_\varepsilon^2+ \mathcal{S}_\varepsilon\\
+    \mathbb{E}\left(x_t^2y_t \right)  &=& \left(\alpha+\beta\mu_X^{(1)}\right) \sigma_\eta^2 +\alpha \mu_X^{(2)} + \beta \mu_X^{(3)}\\
+    \mathbb{E}\left(x_ty_t^2 \right)  &=& \sigma_\varepsilon^2 \mu_X^{(1)}  + \alpha^2\mu_X^{(1)} + 2\alpha\beta\mu_X^{(2)} + \beta^2\mu_X^{(3)}
+  \end{array}
+$$
+
+Deameaning the variables, we have: $$
+  \begin{array}{rcl}
+    \mathbb{E}\left(x_t^2 \right) &=& \mu_{X}^{(2)} + \sigma_\eta^2 \\
+    \mathbb{E}\left(y_t^2 \right) &=& \beta^2\mu_{X}^{(2)} +\sigma_\varepsilon^2\\
+    \mathbb{E}\left(x_ty_t \right) &=&  \beta \mu_{X}^{(2)}\\
+     \mathbb{E}\left(x_t^3 \right)  &=& \mu_X^{(3)}   + \mathcal{S}_\eta\\
+    \mathbb{E}\left(y_t^3 \right)  &=&  \beta^3\mu_X^{(3)} + \mathcal{S}_\varepsilon\\
+    \mathbb{E}\left(x_t^2y_t \right)  &=& \beta \mu_X^{(3)}\\
+    \mathbb{E}\left(x_ty_t^2 \right)  &=& \beta^2\mu_X^{(3)}
+  \end{array}
+$$ This leads to a just-identified system where the estimate for $\beta$
+is given by: $$
+  \widehat{\beta} = \frac{\sum_{t=1}^{T} x_ty_t^2}{\sum_{t=1}^{T}x_t^2 y_t}\,.
+$$
+
+All the following are estimated with one-step GMM (weighting is
+irrelevant in a just-identified system) and HAC-corrected standard
+deviations.
+
+```{r GMM estimation, cache = T}
+library(gmm)
+theta_to_params <- function(params, exponen = T){
+  
+  alpha   <- 0#params[1]
+  beta    <- params[1]
+  mu_x_1  <- 0#params[3]
+  mu_x_2  <- params[2]
+  mu_x_3  <- params[3]/1000
+  
+  sigma_eta <- params[4]
+  sigma_eps <- params[5]
+  a <- 0 #params[8]
+  skew_eps <- params[6]/1000
+  skew_eta <- params[7]/1000
+  
+  if(exponen == T){
+    mu_x_2    <- exp(params[2])
+    sigma_eta <- exp(params[4])
+    sigma_eps   <- exp(params[5])
+  }
+  
+  return(list(
+    "alpha" = alpha,
+    "beta" = beta,
+    "mu_x_1" = mu_x_1,
+    "mu_x_2" = mu_x_2,
+    "mu_x_3" = mu_x_3,
+    "sigma_eta" = sigma_eta,
+    "sigma_eps" = sigma_eps,
+    "a" = a,
+    "skew_eps" = skew_eps,
+    "skew_eta" = skew_eta
+  ))
+}
+
+GMM_fun <- function(params, total_data, exponen = T){
+  
+  X_data <- total_data[,1] 
+  Y_data <- total_data[,2] 
+  
+  get_params <- theta_to_params(params, exponen)
+  
+  alpha     <- get_params$alpha
+  beta      <- get_params$beta
+  mu_x_1    <- get_params$mu_x_1
+  mu_x_2    <- get_params$mu_x_2
+  mu_x_3    <- get_params$mu_x_3
+  
+  sigma_eta <- get_params$sigma_eta
+  sigma_eps <- get_params$sigma_eps
+  a         <- get_params$a
+  skew_eps  <- get_params$skew_eps
+  skew_eta  <- get_params$skew_eta
+  
+  
+  m1 <- X_data - (mu_x_1 + a)
+  m2 <- Y_data - (alpha + beta * mu_x_1)
+  m3 <- X_data^2 - (mu_x_2 + 2 * a * mu_x_1 + sigma_eta^2 + a^2)
+  m4 <- Y_data^2 - (alpha^2 + beta^2  * mu_x_2 + sigma_eps^2 + 2 * alpha * beta * mu_x_1)
+  m5 <- Y_data * X_data - (alpha * a + (alpha + beta * a) * mu_x_1 + beta * mu_x_2)
+  
+  m6 <- X_data^3 - (
+    mu_x_3 + 3 * a * mu_x_2 + 3 * (sigma_eta^2 + a^2) * mu_x_1 + a^3 + 3 * a * sigma_eta^2 + skew_eta
+  )
+  m7 <- Y_data^3 - (
+    alpha^3 + 3 * alpha^2 * beta * mu_x_1 + 3 * alpha * beta^2 * mu_x_2 + beta^3 * mu_x_3 + 3 * (alpha + beta * mu_x_1) * sigma_eps^2 + skew_eps
+  )
+  m8 <- X_data^2 * Y_data - (
+    (alpha + beta * mu_x_1) * (a^2 + sigma_eta^2) + 2 * a * (alpha * mu_x_1 + beta * mu_x_2) + alpha * mu_x_2 + beta * mu_x_3
+  )
+  m9 <- X_data * Y_data^2 - (
+    sigma_eps^2 * (mu_x_1 + a) + a * (alpha^2 + 2 * alpha * beta * mu_x_1 + beta^2 * mu_x_2) + alpha^2 * mu_x_1 + 2 * alpha * beta * mu_x_2 + beta^2 * mu_x_3
+  )
+  
+  moment_matrix <-  1e4 * cbind(#m1,m2,
+                                m3,m4,m5,m6,m7,m8,m9)
+  return(moment_matrix)
+  
+}
+
+estim_fun <- function(params, total_data, exponen){
+    moment_mat <- GMM_fun(params, total_data, exponen)
+    
+    result <- apply(moment_mat, 2, mean)
+    result <- crossprod(result)
+    
+    return(c(result))
+}
+
+
+
+
+###############################################
+# Rolling over all maturities
+for(i in c(2,3,5,7,10)){
+  X_data <- US_data$EUR_CDS
+  Y_data <- US_data %>% dplyr::select(paste0("ILSBEI",i)) %>% c() %>% unlist()
+
+  lm_init <- lm(Y_data ~ X_data)
+
+  starting_values <- c(
+    lm_init$coefficients["X_data"],
+    log(mean(X_data^2) - 0.01),
+    mean(X_data^3)*1000,
+    log(sqrt(0.01)),
+    log(sd(lm_init$residuals))
+    ,0,0
+  )
+
+  #starting_values[c(4,6,7)] <- exp(starting_values[c(4,6,7)])
+
+  names(starting_values) <- c(#"alpha", 
+                              "beta", 
+                              #"E(x)", 
+                              "log[E(x^2)]", "E(x^3)*1000", 
+                              "log(sig_eta)", "log(sig_eps)"
+                              , "S_eps*1000", "S_eta*1000"
+                              )
+
+  assign(x = paste0("Gmm_init",i),
+         value = gmm(g = GMM_fun, x = cbind(X_data, Y_data),
+                     t0 = starting_values,
+                     optfct = "nlminb", type = "twoStep"))
+
+  
+}
+library(stargazer)
+
+
+###############################################
+library(momentfit)
+library(texreg)
+setMethod("extract", "gmmfit",
+          function(model, includeJTest=TRUE, includeFTest=TRUE, ...)
+          {
+            s <- summary(model, ...)
+            spec <- modelDims(model@model)
+            coefs <- s@coef
+            names <- rownames(coefs)
+            coef <- coefs[, 1]
+            se <- coefs[, 2]
+            pval <- coefs[, 4]
+            n <- model@model@n
+            gof <- numeric()
+            gof.names <- character()
+            gof.decimal <- logical()
+            if (includeJTest) {
+              if (spec$k == spec$q)
+              {
+                obj.fcn <- NA
+                obj.pv <- NA
+              } else {
+                obj.fcn <- s@specTest@test[1]
+                obj.pv <- s@specTest@test[3]
+              }
+              gof <- c(gof, obj.fcn, obj.pv)
+              gof.names <- c(gof.names, "J-test Statistics", "J-test p-value")
+              gof.decimal <- c(gof.decimal, TRUE, TRUE)
+            }
+            if (includeFTest) {
+              str <- s@strength$strength
+              if (is.null(str))
+              {
+                gof <- c(gof, NA)
+                gof.names <- c(gof.names, "First Stage F-stats")
+                gof.decimal <- c(gof.decimal, TRUE)
+              } else {
+                for (i in 1:nrow(str))
+                {
+                  gof <- c(gof, str[i,1])
+                  gofn <- paste("First Stage F-stats(",
+                                rownames(str)[i], ")", sep="")
+                  gof.names <- c(gof.names, gofn)
+                  gof.decimal <- c(gof.decimal, TRUE)
+                }
+              }
+            }
+            tr <- createTexreg(coef.names = names, coef = coef, se = se,
+                               pvalues = pval, gof.names = gof.names, gof = gof,
+                               gof.decimal = gof.decimal)
+            return(tr)
+          })
+
+for(i in c(2,3,5,7,10)){
+  X_data <- US_data$EUR_CDS - mean(US_data$EUR_CDS)
+  Y_data <- US_data %>% dplyr::select(paste0("ILSBEI",i)) %>% c() %>% unlist()
+  Y_data <- Y_data - mean(Y_data)
+  
+  #lm_init <- lm(Y_data ~ X_data)  
+  
+  # starting_values <- c(
+  #   #lm_init$coefficients["(Intercept)"],
+  #   mean(Y_data^2 * X_data)/mean(X_data^2 * Y_data),#lm_init$coefficients["X_data"],
+  #   #mean(US_data$EUR_CDS),#lm_init$coefficients[2],#
+  #   log(mean(X_data^2) - 0.01),
+  #   mean(X_data^3)*1000,
+  #   log(sqrt(0.01)),
+  #   log(sd(lm_init$residuals))
+  #   ,0,0
+  # )
+# 
+  #estim_fun(starting_values, total_data = cbind(X_data, Y_data), exponen = T)
+  # library(optimx)
+  
+  # minim <- optimx(par = starting_values, fn = estim_fun,
+  #                 exponen = T,
+  #                 total_data = cbind(X_data, Y_data),
+  #                 method = "nlminb",
+  #                 control = list(trace = 0))
+  # 
+  # 
+  # 
+  # 
+  # starting_values <- c(coefficients(minim))
+  #starting_values[c(2,4,5)] <- exp(starting_values[c(2,4,5)])
+  Init_beta <- mean(Y_data^2 * X_data)/mean(X_data^2 * Y_data)
+  starting_values <- c(
+    Init_beta,
+    log(mean(X_data * Y_data) / Init_beta),
+    1000 * mean(X_data^2 * Y_data)/Init_beta,
+    log(sqrt(mean(X_data^2 - mean(X_data * Y_data) / Init_beta))),
+    log(sqrt(mean(Y_data^2 - Init_beta * mean(X_data * Y_data)))),
+    1000 * (mean(Y_data^3) - Init_beta^2 * mean(X_data^2 * Y_data)),
+    1000 * (mean(X_data^3) - mean(X_data^2 * Y_data)/Init_beta)
+  )
+  
+  
+  names(starting_values) <- c(#"alpha", 
+                              "beta", 
+                              #"E(x)", 
+                              "log[E(x^2)]", "E(x^3)*1000", 
+                              "log(sig_eta)", "log(sig_eps)"
+                              , "S_eps*1000", "S_eta*1000"
+                              )
+  
+  Model <- momentModel(g = GMM_fun, x = cbind(X_data, Y_data), 
+                    theta0 = starting_values, vcov="HAC",
+                    vcovOptions=list(kernel="Bartlett", bw="NeweyWest", prewhite = T))
+  
+  assign(x = paste0("Gmm",i),
+         value = gmmFit(Model, type = "twostep"))
+  
+ 
+}
+
+# Model <- momentModel(g = GMM_fun, x = cbind(
+#   X_data, 
+#   US_data %>% dplyr::select(paste0("ILSBEI",2)) %>% c() %>% unlist()), 
+#                     theta0 = Gmm5@theta, vcov="HAC",
+#                     vcovOptions=list(kernel="Bartlett", bw="NeweyWest", prewhite = T))
+#   
+# Gmm2 <- gmmFit(Model, type = "twostep")
+
+
+stargazer(Gmm_init2, Gmm_init3, Gmm_init5, Gmm_init7, Gmm_init10, type = "text",
+          coef = list(Gmm2@theta, Gmm3@theta, Gmm5@theta, Gmm7@theta, Gmm10@theta),
+          se = list(extract(Gmm2)@se, extract(Gmm3)@se, extract(Gmm5)@se,
+                    extract(Gmm7)@se, extract(Gmm10)@se),
+          dep.var.caption = "ILS-BEI spread", 
+          dep.var.labels = c("Maturities (in years)"),
+          column.labels = c("2","3","5","7","10"),
+          dep.var.labels.include = T, colnames = F
+          )
+
+
+```
+
+### Smaller Sample (2010 - 2019) {.tabset}
+
+#### Levels
+
+```{r smaller sample levels, cache = T}
+reduced_US_data <- US_data %>%
+  filter(year_month >= "Jan 2010")
+library(stargazer)
+library(sandwich)
+
+
+
+lm2 <- lm(ILSBEI2 ~ EUR_CDS, data = reduced_US_data)
+lm3 <- lm(ILSBEI3 ~ EUR_CDS, data = reduced_US_data)
+lm5 <- lm(ILSBEI5 ~ EUR_CDS, data = reduced_US_data)
+lm7 <- lm(ILSBEI7 ~ EUR_CDS, data = reduced_US_data)
+lm10 <- lm(ILSBEI10 ~ EUR_CDS, data = reduced_US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser")
+          )
+
+
+
+lm2 <- lm(ILSBEI2 ~ cds2, data = reduced_US_data)
+lm3 <- lm(ILSBEI3 ~ cds3, data = reduced_US_data)
+lm5 <- lm(ILSBEI5 ~ cds5, data = reduced_US_data)
+lm7 <- lm(ILSBEI7 ~ cds7, data = reduced_US_data)
+lm10 <- lm(ILSBEI10 ~ cds10, data = reduced_US_data)
+
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on maturity-matched CDS levels",
+          omit.stat = c("f", "ser")
+          )
+
+lm2 <- lm(ILSBEI2 ~ Debt_growth, data = reduced_US_data)
+lm3 <- lm(ILSBEI3 ~ Debt_growth, data = reduced_US_data)
+lm5 <- lm(ILSBEI5 ~ Debt_growth, data = reduced_US_data)
+lm7 <- lm(ILSBEI7 ~ Debt_growth, data = reduced_US_data)
+lm10 <- lm(ILSBEI10 ~ Debt_growth, data = reduced_US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on debt growth",
+          omit.stat = c("f", "ser")
+          )
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+
+lm2 <- lm(ILSBEI2 ~ Debt_growth_yoy, data = reduced_US_data)
+lm3 <- lm(ILSBEI3 ~ Debt_growth_yoy, data = reduced_US_data)
+lm5 <- lm(ILSBEI5 ~ Debt_growth_yoy, data = reduced_US_data)
+lm7 <- lm(ILSBEI7 ~ Debt_growth_yoy, data = reduced_US_data)
+lm10 <- lm(ILSBEI10 ~ Debt_growth_yoy, data = reduced_US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on yoy debt growth",
+          omit.stat = c("f", "ser")
+          )
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+```
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+```{r regression with controls reduced sample, cache = T}
+
+lm2 <- lm(ILSBEI5 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+lm3 <- lm(ILSBEI5 ~ AAA10Y + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+lm5 <- lm(ILSBEI5 ~ BAA10Y + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+lm7 <- lm(ILSBEI5 ~ BAA_AAA + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+lm10 <- lm(ILSBEI5 ~ inflation_month + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+lm11 <- lm(ILSBEI5 ~ Debt_to_GDP + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+lm12 <- lm(ILSBEI5 ~ TIPS_growth_yoy + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+lm13 <- lm(ILSBEI5 ~ Debt_growth_yoy + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+lm14 <- lm(ILSBEI5 ~ TIPS_ratio + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+lm15 <- lm(ILSBEI5 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+# lm20 <- lm(ILSBEI5 ~ EUR_CDS + AAA10Y + BAA_AAA + inflation_month + Debt_to_GDP + TIPS_growth_yoy+ Debt_growth_yoy+ TIPS_ratio + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = reduced_US_data)
+
+stargazer(lm2, lm3, lm5, lm7, lm10, lm11, lm12, lm13, lm14, lm15, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10))),
+            sqrt(diag(NeweyWest(lm11))),
+            sqrt(diag(NeweyWest(lm12))),
+            sqrt(diag(NeweyWest(lm13))),
+            sqrt(diag(NeweyWest(lm14))),
+            sqrt(diag(NeweyWest(lm15)))
+            ),
+          title = "Regressions of ILSBEI on controls",
+          omit.stat = c("f", "ser")
+          )
+
+
+
+cor_mat <- US_data %>% dplyr::select(EUR_CDS, AAA10Y, BAA_AAA, inflation_month, Debt_to_GDP, TIPS_ratio, vix, libor_ois, hpw_noise, tips_noise, Off_On_run, TIPS_growth_yoy, Debt_growth_yoy, Debt_growth) %>% cor() 
+cor_mat[upper.tri(cor_mat, diag=T)] <- NA
+  
+options(knitr.kable.NA = '')
+cor_mat %>% knitr::kable(digits=3, caption = "Correlation matrix")
+
+par(mfrow=c(2,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (1)")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (2)")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (3)")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (4)")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (5)")
+plot(acf(lm11$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (6)")
+plot(acf(lm12$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (7)")
+plot(acf(lm13$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (8)")
+plot(acf(lm14$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (9)")
+plot(acf(lm15$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (10)")
+```
+
+#### First difference
+
+```{r small smaple first diff, cache = T}
+library(stargazer)
+library(sandwich)
+
+lm2 <- lm(diff(ILSBEI2) ~ diff(EUR_CDS), data = reduced_US_data)
+lm3 <- lm(diff(ILSBEI3) ~ diff(EUR_CDS), data = reduced_US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(EUR_CDS), data = reduced_US_data)
+lm7 <- lm(diff(ILSBEI7) ~ diff(EUR_CDS), data = reduced_US_data)
+lm10 <- lm(diff(ILSBEI10) ~ diff(EUR_CDS), data = reduced_US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser")
+          )
+
+# 
+# lm2 <- lm(diff(ILSBEI2) ~ diff(log_CDS), data = reduced_US_data)
+# lm3 <- lm(diff(ILSBEI3) ~ diff(log_CDS), data = reduced_US_data)
+# lm5 <- lm(diff(ILSBEI5) ~ diff(log_CDS), data = reduced_US_data)
+# lm7 <- lm(diff(ILSBEI7) ~ diff(log_CDS), data = reduced_US_data)
+# lm10 <- lm(diff(ILSBEI10) ~ diff(log_CDS), data = reduced_US_data)
+# stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+#           se = list(
+#             sqrt(diag(NeweyWest(lm2))),
+#             sqrt(diag(NeweyWest(lm3))),
+#             sqrt(diag(NeweyWest(lm5))),
+#             sqrt(diag(NeweyWest(lm7))),
+#             sqrt(diag(NeweyWest(lm10)))
+#             ),
+#           title = "Regressions of ILSBEI on 5y EUR denominated log-CDS"
+#           )
+
+
+lm2 <- lm(diff(ILSBEI2) ~ diff(cds2), data = reduced_US_data)
+lm3 <- lm(diff(ILSBEI3) ~ diff(cds3), data = reduced_US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(cds5), data = reduced_US_data)
+lm7 <- lm(diff(ILSBEI7) ~ diff(cds7), data = reduced_US_data)
+lm10 <- lm(diff(ILSBEI10) ~ diff(cds10), data = reduced_US_data)
+
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on maturity-matched CDS levels",
+          omit.stat = c("f", "ser")
+          )
+
+lm2 <- lm(diff(ILSBEI2) ~ diff(Debt_growth), data = reduced_US_data)
+lm3 <- lm(diff(ILSBEI3) ~ diff(Debt_growth), data = reduced_US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(Debt_growth), data = reduced_US_data)
+lm7 <- lm(diff(ILSBEI7) ~ diff(Debt_growth), data = reduced_US_data)
+lm10 <- lm(diff(ILSBEI10) ~ diff(Debt_growth), data = reduced_US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on debt growth",
+          omit.stat = c("f", "ser")
+          )
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+
+lm2 <- lm(diff(ILSBEI2) ~ diff(Debt_growth_yoy), data = reduced_US_data)
+lm3 <- lm(diff(ILSBEI3) ~ diff(Debt_growth_yoy), data = reduced_US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(Debt_growth_yoy), data = reduced_US_data)
+lm7 <- lm(diff(ILSBEI7) ~ diff(Debt_growth_yoy), data = reduced_US_data)
+lm10 <- lm(diff(ILSBEI10) ~ diff(Debt_growth_yoy), data = reduced_US_data)
+stargazer(lm2, lm3, lm5, lm7, lm10, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10)))
+            ),
+          title = "Regressions of ILSBEI on yoy debt growth",
+          omit.stat = c("f", "ser")
+          )
+par(mfrow=c(1,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "2y res ACF")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "3y res ACF")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "5y res ACF")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "7y res ACF")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "10y res ACF")
+
+```
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+```{r regression with controls reduced sample diff, cache = T}
+diff <- function(x){x - dplyr::lag(x)}
+lm2 <- lm(diff(ILSBEI5) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = reduced_US_data)
+lm3 <- lm(diff(ILSBEI5) ~ diff(AAA10Y) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = reduced_US_data)
+lm5 <- lm(diff(ILSBEI5) ~ diff(BAA10Y) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = reduced_US_data)
+lm7 <- lm(diff(ILSBEI5) ~ diff(BAA_AAA) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = reduced_US_data)
+lm10 <- lm(diff(ILSBEI5) ~ inflation_month + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = reduced_US_data)
+lm11 <- lm(diff(ILSBEI5) ~ diff(Debt_to_GDP) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = reduced_US_data)
+lm12 <- lm(diff(ILSBEI5) ~ TIPS_growth_yoy + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = reduced_US_data)
+lm13 <- lm(diff(ILSBEI5) ~ Debt_growth_yoy + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = reduced_US_data)
+lm14 <- lm(diff(ILSBEI5) ~ diff(TIPS_ratio) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = reduced_US_data)
+lm15 <- lm(diff(ILSBEI5) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = reduced_US_data)
+
+
+
+stargazer(lm2, lm3, lm5, lm7, lm10, lm11, lm12, lm13, lm14, lm15, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2))),
+            sqrt(diag(NeweyWest(lm3))),
+            sqrt(diag(NeweyWest(lm5))),
+            sqrt(diag(NeweyWest(lm7))),
+            sqrt(diag(NeweyWest(lm10))),
+            sqrt(diag(NeweyWest(lm11))),
+            sqrt(diag(NeweyWest(lm12))),
+            sqrt(diag(NeweyWest(lm13))),
+            sqrt(diag(NeweyWest(lm14))),
+            sqrt(diag(NeweyWest(lm15)))
+            ),
+          title = "Regressions of 5y ILSBEI on controls",
+          omit.stat = c("f", "ser")
+          )
+
+cor_mat <- reduced_US_data %>% dplyr::select(EUR_CDS, AAA10Y, BAA_AAA, inflation_month, Debt_to_GDP, TIPS_ratio, vix, libor_ois, hpw_noise, tips_noise, Off_On_run, TIPS_growth_yoy, Debt_growth_yoy, Debt_growth) %>% 
+  mutate(across(1:11, ~ diff(.x)))  %>%
+  cor(use="pairwise.complete") 
+cor_mat[upper.tri(cor_mat, diag=T)] <- NA
+  
+options(knitr.kable.NA = '')
+cor_mat %>% knitr::kable(digits=3, caption = "Correlation matrix")
+
+par(mfrow=c(2,5), mai = c(.3,.3,.6,.1))
+plot(acf(lm2$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (1)")
+plot(acf(lm3$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (2)")
+plot(acf(lm5$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (3)")
+plot(acf(lm7$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (4)")
+plot(acf(lm10$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (5)")
+plot(acf(lm11$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (6)")
+plot(acf(lm12$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (7)")
+plot(acf(lm13$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (8)")
+plot(acf(lm14$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (9)")
+plot(acf(lm15$residuals, plot = F)[1:12], type = 'o', panel.first= grid(), pch = 21, bg = "black", main = "res ACF (10)")
+```
+
+## IV regressions {.tabset}
+
+### Full Sample (2005 - 2019) {.tabset}
+
+#### Levels {.tabset}
+
+##### No Controls {.tabset}
+
+```{r IV regs, cache = T}
+US_data_IV <- US_data %>%
+  mutate(id = 1)
+
+
+library(fixest)
+iv_reg2 <- feols(ILSBEI2 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+iv_reg2 <- feols(ILSBEI2 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+
+```
+
+##### Non-transformed controls
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+```{r IV regs controls, cache = T}
+library(fixest)
+
+iv_reg2 <- feols(ILSBEI2 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+iv_reg2 <- feols(ILSBEI2 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+
+```
+
+##### Transformed controls
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+We first regress all liquidity variables onto the year-on-year growth of
+public debt outstanding, assuming exogeneity.
+
+```{r IV regs controls 2, cache = T}
+library(fixest)
+
+US_data_IV <- US_data_IV %>%
+  mutate(res_vix        = lm(vix ~ Debt_growth_yoy)$residual,
+         res_libor_ois  = lm(libor_ois ~ Debt_growth_yoy)$residual,
+         res_hpw_noise  = lm(hpw_noise ~ Debt_growth_yoy)$residual,
+         res_tips_noise = lm(tips_noise ~ Debt_growth_yoy)$residual,
+         res_Off_On_run = lm(Off_On_run ~ Debt_growth_yoy)$residual)
+
+iv_reg2 <- feols(ILSBEI2 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run  | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+fct_moments <- function(theta, total_data, return_res = F){
+  
+  Instrument    <- total_data$instrument
+  Lhs_var       <- total_data$lhs
+  Interest_var  <- total_data$interest
+  Controls      <- as.matrix(total_data$controls)
+  
+  # First step regression
+  b1 <- theta[1]
+  res1 <- Interest_var  - b1 * Instrument
+  
+  # Orthogonalizing the regressors
+  l_theta <- 1
+  beta1   <- theta[(l_theta + 1):(l_theta + ncol(Controls))]
+  l_theta <- l_theta + ncol(Controls)
+  res2    <- Controls -
+    matrix(Instrument, ncol = 1) %*% matrix(beta1, nrow = 1)
+  
+  # Second stage reg
+  beta2         <- theta[(l_theta + 1):(l_theta + ncol(Controls))]
+  l_theta       <- l_theta + ncol(Controls)
+  beta_interest <- theta[l_theta + 1]
+  
+  fitted_step1  <- b1 * Instrument
+  res3          <- Lhs_var - beta_interest * fitted_step1 -
+    res2 %*% matrix(beta2, ncol = 1)
+  ortho_res3    <- (res3 %*% matrix(1, nrow = 1, ncol = ncol(Controls) + 1)) * cbind(
+    fitted_step1, res2
+  )
+  
+  if(return_res == F){
+    return(
+      cbind(
+        res1 * Instrument, 
+        res2 * (matrix(Instrument, ncol = 1) %*% matrix(1, nrow = 1, ncol = length(beta1))), 
+        ortho_res3
+      )
+    )  
+  }else{
+    return(
+      list(res3,
+           "R2_first" = round(1 - sum(res1^2)/sum(Interest_var^2),3),
+           "R2_second" = round(1 - sum(res3^2)/sum(Lhs_var^2),3))
+    )
+  }
+  
+}
+
+
+library(momentfit)
+library(gmm)
+
+ILSBEI_data <- US_data %>% dplyr::select(ILSBEI2, ILSBEI3, ILSBEI5, ILSBEI7, ILSBEI10) %>% as.matrix()
+
+count <- 0
+for(i in c(2,3,5,7,10)){
+  count <- count + 1
+  moment_data <- list(
+    "instrument" = US_data$Debt_growth_yoy - mean(US_data$Debt_growth_yoy),
+    "lhs" = ILSBEI_data[, count] - mean(ILSBEI_data[, count]),
+    "interest" = US_data$EUR_CDS - mean(US_data$EUR_CDS),
+    "controls" = as.matrix(US_data[,c("vix","libor_ois", "hpw_noise", "tips_noise", "Off_On_run")]) - matrix(1, nrow(US_data), 1) %*% apply(as.matrix(US_data[,c("vix","libor_ois", "hpw_noise", "tips_noise", "Off_On_run")]),2,mean)
+  )  
+  
+  
+  lm_first        <- lm(moment_data$interest ~ moment_data$instrument, data = US_data)
+  lm_vix          <- lm(moment_data$controls[,1] ~ moment_data$instrument, data = US_data)
+  lm_libor_ois    <- lm(moment_data$controls[,2] ~ moment_data$instrument, data = US_data)
+  lm_hpw_noise    <- lm(moment_data$controls[,3] ~ moment_data$instrument, data = US_data)
+  lm_tips_noise   <- lm(moment_data$controls[,4] ~ moment_data$instrument, data = US_data)
+  lm_Off_On_run   <- lm(moment_data$controls[,5] ~ moment_data$instrument, data = US_data)
+  lm_second       <- lm(moment_data$lhs ~ lm_vix$residuals +
+                          lm_libor_ois$residuals + lm_hpw_noise$residuals + 
+                          lm_tips_noise$residuals + lm_Off_On_run$residuals +
+                          lm_first$fitted)
+  
+  params_init <- c(
+    lm_first$coefficients[2],
+    lm_vix$coefficients[2],
+    lm_libor_ois$coefficients[2],
+    lm_hpw_noise$coefficients[2],
+    lm_tips_noise$coefficients[2],
+    lm_Off_On_run$coefficients[2],
+    lm_second$coefficients[2:7]
+  )
+  
+  names(params_init) <- c(
+    "CDS: Instrument",
+    "vix: Instrument",
+    "libor_ois: Instrument",
+    "hpw_noise: Instrument",
+    "tips_noise: Instrument",
+    "Off_On_run: Instrument",
+    "residual vix",
+    "residual libor_ois",
+    "residual hpw_noise",
+    "residual tips_noise",
+    "residual Off_On_run",
+    "fitted CDS"
+  )
+  
+  assign(x = paste0("gmm_IV",i), value = gmm(g = fct_moments, x=moment_data, t0 = params_init, 
+                   kernel = "Bartlett", wmatrix = "ident",vcov="HAC", bw=bwNeweyWest))
+  
+  assign(x = paste0("final_mat_GMM_IV",i), 
+         value = fct_moments(params_init, moment_data, return_res = T))
+  
+}
+
+ 
+cat("Same exercise with corrected standard errors \n
+    ----------------------------------------------")
+
+stargazer(gmm_IV2, gmm_IV3, gmm_IV5, gmm_IV7, gmm_IV10, type = "text",
+          title = "IV with orthogonalized regressors", 
+          column.labels = c("2y","3y","5y", "7y", "10y"),
+          model.numbers = F,
+          dep.var.caption = "ILS-BEI spreads",
+          dep.var.labels = NULL,
+          omit.stat = "n",
+          add.lines = list(c("First stage $R2$", final_mat_GMM_IV2$R2_first, 
+                             final_mat_GMM_IV3$R2_first, final_mat_GMM_IV5$R2_first,
+                             final_mat_GMM_IV7$R2_first, final_mat_GMM_IV10$R2_first),
+                           c("Second stage $R2$", final_mat_GMM_IV2$R2_second, 
+                             final_mat_GMM_IV3$R2_second, final_mat_GMM_IV5$R2_second,
+                             final_mat_GMM_IV7$R2_second, final_mat_GMM_IV10$R2_second),
+                           c("Observations", length(final_mat_GMM_IV2[[1]]), 
+                            length(final_mat_GMM_IV3[[1]]), length(final_mat_GMM_IV5[[1]]),
+                            length(final_mat_GMM_IV7[[1]]), length(final_mat_GMM_IV10[[1]]))),
+          order = c(12, 7:11, 1:6))
+
+
+
+
+```
+
+#### First difference {.tabset}
+
+##### No Controls {.tabset}
+
+```{r IV regs diff, cache = T}
+diff <- function(x){x - dplyr::lag(x)}
+US_data_IV_diff <- US_data_IV %>%
+  mutate(across(swap2:BAA10Y, ~ diff(.x)))
+US_data_IV_diff <- US_data_IV_diff %>%
+  mutate(across(BAA_AAA:Off_On_run, ~ diff(.x))) %>%
+  dplyr::select(- res_vix, - res_libor_ois, - res_hpw_noise,
+                - res_tips_noise, - res_Off_On_run)
+US_data_IV_diff <- US_data_IV_diff %>% 
+  filter(year_month > "Jun 2005")
+
+
+library(fixest)
+iv_reg2 <- feols(ILSBEI2 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~ id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~ id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~ id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~ id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~ id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+iv_reg2 <- feols(ILSBEI2 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~ id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~ id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~ id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~ id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~ id + year_month)
+
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+
+```
+
+##### Non-transformed controls
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+```{r IV regs controls diff, cache = T}
+library(fixest)
+
+iv_reg2 <- feols(ILSBEI2 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+iv_reg2 <- feols(ILSBEI2 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+
+```
+
+##### Transformed controls
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+We first regress all liquidity variables onto the year-on-year growth of
+public debt outstanding, assuming exogeneity.
+
+```{r IV regs controls diff 2, cache = T}
+library(fixest)
+
+US_data_IV_diff <- US_data_IV_diff %>%
+  mutate(res_vix        = lm(vix ~ Debt_growth_yoy)$residual,
+         res_libor_ois  = lm(libor_ois ~ Debt_growth_yoy)$residual,
+         res_hpw_noise  = lm(hpw_noise ~ Debt_growth_yoy)$residual,
+         res_tips_noise = lm(tips_noise ~ Debt_growth_yoy)$residual,
+         res_Off_On_run = lm(Off_On_run ~ Debt_growth_yoy)$residual)
+
+iv_reg2 <- feols(ILSBEI2 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run  | EUR_CDS ~ Debt_growth_yoy,
+       data = US_data_IV_diff, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+fct_moments <- function(theta, total_data, return_res = F){
+  
+  Instrument    <- total_data$instrument
+  Lhs_var       <- total_data$lhs
+  Interest_var  <- total_data$interest
+  Controls      <- as.matrix(total_data$controls)
+  
+  # First step regression
+  b1 <- theta[1]
+  res1 <- Interest_var  - b1 * Instrument
+  
+  # Orthogonalizing the regressors
+  l_theta <- 1
+  beta1   <- theta[(l_theta + 1):(l_theta + ncol(Controls))]
+  l_theta <- l_theta + ncol(Controls)
+  res2    <- Controls -
+    matrix(Instrument, ncol = 1) %*% matrix(beta1, nrow = 1)
+  
+  # Second stage reg
+  beta2         <- theta[(l_theta + 1):(l_theta + ncol(Controls))]
+  l_theta       <- l_theta + ncol(Controls)
+  beta_interest <- theta[l_theta + 1]
+  
+  fitted_step1  <- b1 * Instrument
+  res3          <- Lhs_var - beta_interest * fitted_step1 -
+    res2 %*% matrix(beta2, ncol = 1)
+  ortho_res3    <- (res3 %*% matrix(1, nrow = 1, ncol = ncol(Controls) + 1)) * cbind(
+    fitted_step1, res2
+  )
+  
+  if(return_res == F){
+    return(
+      cbind(
+        res1 * Instrument, 
+        res2 * (matrix(Instrument, ncol = 1) %*% matrix(1, nrow = 1, ncol = length(beta1))), 
+        ortho_res3
+      )
+    )  
+  }else{
+    return(
+      list(res3,
+           "R2_first" = round(1 - sum(res1^2)/sum(Interest_var^2),3),
+           "R2_second" = round(1 - sum(res3^2)/sum(Lhs_var^2),3))
+    )
+  }
+  
+}
+
+
+library(momentfit)
+library(gmm)
+
+ILSBEI_data <- US_data_IV_diff %>% dplyr::select(ILSBEI2, ILSBEI3, ILSBEI5, ILSBEI7, ILSBEI10) %>% as.matrix()
+
+count <- 0
+for(i in c(2,3,5,7,10)){
+  count <- count + 1
+  moment_data <- list(
+    "instrument" = US_data_IV_diff$Debt_growth_yoy - mean(US_data_IV_diff$Debt_growth_yoy),
+    "lhs" = ILSBEI_data[, count] - mean(ILSBEI_data[, count]),
+    "interest" = US_data_IV_diff$EUR_CDS - mean(US_data_IV_diff$EUR_CDS),
+    "controls" = as.matrix(US_data_IV_diff[,c("vix","libor_ois", "hpw_noise", "tips_noise", "Off_On_run")]) - matrix(1, nrow(US_data_IV_diff), 1) %*% apply(as.matrix(US_data_IV_diff[,c("vix","libor_ois", "hpw_noise", "tips_noise", "Off_On_run")]),2,mean)
+  )  
+  
+  
+  lm_first        <- lm(moment_data$interest ~ moment_data$instrument, data = US_data)
+  lm_vix          <- lm(moment_data$controls[,1] ~ moment_data$instrument, data = US_data)
+  lm_libor_ois    <- lm(moment_data$controls[,2] ~ moment_data$instrument, data = US_data)
+  lm_hpw_noise    <- lm(moment_data$controls[,3] ~ moment_data$instrument, data = US_data)
+  lm_tips_noise   <- lm(moment_data$controls[,4] ~ moment_data$instrument, data = US_data)
+  lm_Off_On_run   <- lm(moment_data$controls[,5] ~ moment_data$instrument, data = US_data)
+  lm_second       <- lm(moment_data$lhs ~ lm_vix$residuals +
+                          lm_libor_ois$residuals + lm_hpw_noise$residuals + 
+                          lm_tips_noise$residuals + lm_Off_On_run$residuals +
+                          lm_first$fitted)
+  
+  params_init <- c(
+    lm_first$coefficients[2],
+    lm_vix$coefficients[2],
+    lm_libor_ois$coefficients[2],
+    lm_hpw_noise$coefficients[2],
+    lm_tips_noise$coefficients[2],
+    lm_Off_On_run$coefficients[2],
+    lm_second$coefficients[2:7]
+  )
+  
+  names(params_init) <- c(
+    "CDS: Instrument",
+    "vix: Instrument",
+    "libor_ois: Instrument",
+    "hpw_noise: Instrument",
+    "tips_noise: Instrument",
+    "Off_On_run: Instrument",
+    "residual vix",
+    "residual libor_ois",
+    "residual hpw_noise",
+    "residual tips_noise",
+    "residual Off_On_run",
+    "fitted CDS"
+  )
+  
+  assign(x = paste0("gmm_IV",i), value = gmm(g = fct_moments, x=moment_data, t0 = params_init, 
+                   kernel = "Bartlett", wmatrix = "ident",vcov="HAC", bw=bwNeweyWest))
+  
+  assign(x = paste0("final_mat_GMM_IV",i), 
+         value = fct_moments(params_init, moment_data, return_res = T))
+  
+}
+
+ 
+cat("Same exercise with corrected standard errors \n
+    ----------------------------------------------")
+
+stargazer(gmm_IV2, gmm_IV3, gmm_IV5, gmm_IV7, gmm_IV10, type = "text",
+          title = "IV with orthogonalized regressors", 
+          column.labels = c("2y","3y","5y", "7y", "10y"),
+          model.numbers = F,
+          dep.var.caption = "ILS-BEI spreads",
+          dep.var.labels = NULL,
+          omit.stat = "n",
+          add.lines = list(c("First stage $R2$", final_mat_GMM_IV2$R2_first, 
+                             final_mat_GMM_IV3$R2_first, final_mat_GMM_IV5$R2_first,
+                             final_mat_GMM_IV7$R2_first, final_mat_GMM_IV10$R2_first),
+                           c("Second stage $R2$", final_mat_GMM_IV2$R2_second, 
+                             final_mat_GMM_IV3$R2_second, final_mat_GMM_IV5$R2_second,
+                             final_mat_GMM_IV7$R2_second, final_mat_GMM_IV10$R2_second),
+                           c("Observations", length(final_mat_GMM_IV2[[1]]), 
+                            length(final_mat_GMM_IV3[[1]]), length(final_mat_GMM_IV5[[1]]),
+                            length(final_mat_GMM_IV7[[1]]), length(final_mat_GMM_IV10[[1]]))),
+          order = c(12, 7:11, 1:6))
+
+
+
+
+```
+
+### Smaller Sample (2010 - 2019) {.tabset}
+
+#### No Controls {.tabset}
+
+```{r IV regs reduced}
+
+
+reduced_US_data_IV <- reduced_US_data %>%
+  mutate(id = 1)
+
+
+library(fixest)
+iv_reg2 <- feols(ILSBEI2 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ 1   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+iv_reg2 <- feols(ILSBEI2 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ 1   | EUR_CDS ~ Debt_growth,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+```
+
+#### Non-transformed controls
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+```{r IV regs controls reduced}
+library(fixest)
+
+iv_reg2 <- feols(ILSBEI2 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+iv_reg2 <- feols(ILSBEI2 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ vix + libor_ois + hpw_noise + tips_noise + Off_On_run   | EUR_CDS ~ Debt_growth,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+```
+
+#### Transformed controls
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+We first regress all liquidity variables onto the year-on-year growth of
+public debt outstanding, assuming exogeneity.
+
+```{r IV regs controls 2 reduced, cache = T}
+library(fixest)
+
+reduced_US_data_IV <- reduced_US_data_IV %>%
+  mutate(res_vix        = lm(vix ~ Debt_growth_yoy)$residual,
+         res_libor_ois  = lm(libor_ois ~ Debt_growth_yoy)$residual,
+         res_hpw_noise  = lm(hpw_noise ~ Debt_growth_yoy)$residual,
+         res_tips_noise = lm(tips_noise ~ Debt_growth_yoy)$residual,
+         res_Off_On_run = lm(Off_On_run ~ Debt_growth_yoy)$residual)
+
+iv_reg2 <- feols(ILSBEI2 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg3 <- feols(ILSBEI3 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg5 <- feols(ILSBEI5 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg7 <- feols(ILSBEI7 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run   | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+iv_reg10 <- feols(ILSBEI10 ~ res_vix + res_libor_ois + res_hpw_noise + res_tips_noise + res_Off_On_run  | EUR_CDS ~ Debt_growth_yoy,
+       data = reduced_US_data_IV, vcov = "NW", panel.id = ~id + year_month)
+
+library(pander)
+etable(iv_reg2, stage = 1)
+etable(iv_reg2, iv_reg3, iv_reg5, iv_reg7, iv_reg10,
+       stage = 2,
+       postprocess.df = pandoc.table.return, style = "rmarkdown")
+
+
+
+fct_moments <- function(theta, total_data, return_res = F){
+  
+  Instrument    <- total_data$instrument
+  Lhs_var       <- total_data$lhs
+  Interest_var  <- total_data$interest
+  Controls      <- as.matrix(total_data$controls)
+  
+  # First step regression
+  b1 <- theta[1]
+  res1 <- Interest_var  - b1 * Instrument
+  
+  # Orthogonalizing the regressors
+  l_theta <- 1
+  beta1   <- theta[(l_theta + 1):(l_theta + ncol(Controls))]
+  l_theta <- l_theta + ncol(Controls)
+  res2    <- Controls -
+    matrix(Instrument, ncol = 1) %*% matrix(beta1, nrow = 1)
+  
+  # Second stage reg
+  beta2         <- theta[(l_theta + 1):(l_theta + ncol(Controls))]
+  l_theta       <- l_theta + ncol(Controls)
+  beta_interest <- theta[l_theta + 1]
+  
+  fitted_step1  <- b1 * Instrument
+  res3          <- Lhs_var - beta_interest * fitted_step1 -
+    res2 %*% matrix(beta2, ncol = 1)
+  ortho_res3    <- (res3 %*% matrix(1, nrow = 1, ncol = ncol(Controls) + 1)) * cbind(
+    fitted_step1, res2
+  )
+  
+  if(return_res == F){
+    return(
+      cbind(
+        res1 * Instrument, 
+        res2 * (matrix(Instrument, ncol = 1) %*% matrix(1, nrow = 1, ncol = length(beta1))), 
+        ortho_res3
+      )
+    )  
+  }else{
+    return(
+      list(res3,
+           "R2_first" = round(1 - sum(res1^2)/sum(Interest_var^2),3),
+           "R2_second" = round(1 - sum(res3^2)/sum(Lhs_var^2),3))
+    )
+  }
+  
+}
+
+
+library(momentfit)
+library(gmm)
+
+ILSBEI_data <- reduced_US_data_IV %>% dplyr::select(ILSBEI2, ILSBEI3, ILSBEI5, ILSBEI7, ILSBEI10) %>% as.matrix()
+
+count <- 0
+for(i in c(2,3,5,7,10)){
+  count <- count + 1
+  moment_data <- list(
+    "instrument" = reduced_US_data_IV$Debt_growth_yoy - mean(reduced_US_data_IV$Debt_growth_yoy),
+    "lhs" = ILSBEI_data[, count] - mean(ILSBEI_data[, count]),
+    "interest" = reduced_US_data_IV$EUR_CDS - mean(reduced_US_data_IV$EUR_CDS),
+    "controls" = as.matrix(reduced_US_data_IV[,c("vix","libor_ois", "hpw_noise", "tips_noise", "Off_On_run")]) - matrix(1, nrow(reduced_US_data_IV), 1) %*% apply(as.matrix(reduced_US_data_IV[,c("vix","libor_ois", "hpw_noise", "tips_noise", "Off_On_run")]),2,mean)
+  )  
+  
+  
+  lm_first        <- lm(moment_data$interest ~ moment_data$instrument, data = US_data)
+  lm_vix          <- lm(moment_data$controls[,1] ~ moment_data$instrument, data = US_data)
+  lm_libor_ois    <- lm(moment_data$controls[,2] ~ moment_data$instrument, data = US_data)
+  lm_hpw_noise    <- lm(moment_data$controls[,3] ~ moment_data$instrument, data = US_data)
+  lm_tips_noise   <- lm(moment_data$controls[,4] ~ moment_data$instrument, data = US_data)
+  lm_Off_On_run   <- lm(moment_data$controls[,5] ~ moment_data$instrument, data = US_data)
+  lm_second       <- lm(moment_data$lhs ~ lm_vix$residuals +
+                          lm_libor_ois$residuals + lm_hpw_noise$residuals + 
+                          lm_tips_noise$residuals + lm_Off_On_run$residuals +
+                          lm_first$fitted)
+  
+  params_init <- c(
+    lm_first$coefficients[2],
+    lm_vix$coefficients[2],
+    lm_libor_ois$coefficients[2],
+    lm_hpw_noise$coefficients[2],
+    lm_tips_noise$coefficients[2],
+    lm_Off_On_run$coefficients[2],
+    lm_second$coefficients[2:7]
+  )
+  
+  names(params_init) <- c(
+    "CDS: Instrument",
+    "vix: Instrument",
+    "libor_ois: Instrument",
+    "hpw_noise: Instrument",
+    "tips_noise: Instrument",
+    "Off_On_run: Instrument",
+    "residual vix",
+    "residual libor_ois",
+    "residual hpw_noise",
+    "residual tips_noise",
+    "residual Off_On_run",
+    "fitted CDS"
+  )
+  
+  assign(x = paste0("gmm_IV",i), value = gmm(g = fct_moments, x=moment_data, t0 = params_init, 
+                   kernel = "Bartlett", wmatrix = "ident",vcov="HAC", bw=bwNeweyWest))
+  
+  assign(x = paste0("final_mat_GMM_IV",i), 
+         value = fct_moments(params_init, moment_data, return_res = T))
+  
+}
+
+ 
+cat("Same exercise with corrected standard errors \n
+    ----------------------------------------------")
+
+stargazer(gmm_IV2, gmm_IV3, gmm_IV5, gmm_IV7, gmm_IV10, type = "text",
+          title = "IV with orthogonalized regressors", 
+          column.labels = c("2y","3y","5y", "7y", "10y"),
+          model.numbers = F,
+          dep.var.caption = "ILS-BEI spreads",
+          dep.var.labels = NULL,
+          omit.stat = "n",
+          add.lines = list(c("First stage $R2$", final_mat_GMM_IV2$R2_first, 
+                             final_mat_GMM_IV3$R2_first, final_mat_GMM_IV5$R2_first,
+                             final_mat_GMM_IV7$R2_first, final_mat_GMM_IV10$R2_first),
+                           c("Second stage $R2$", final_mat_GMM_IV2$R2_second, 
+                             final_mat_GMM_IV3$R2_second, final_mat_GMM_IV5$R2_second,
+                             final_mat_GMM_IV7$R2_second, final_mat_GMM_IV10$R2_second),
+                           c("Observations", length(final_mat_GMM_IV2[[1]]), 
+                            length(final_mat_GMM_IV3[[1]]), length(final_mat_GMM_IV5[[1]]),
+                            length(final_mat_GMM_IV7[[1]]), length(final_mat_GMM_IV10[[1]]))),
+          order = c(12, 7:11, 1:6))
+
+
+
+```
+
+
+
+## Individual regressions {.tabset}
+
+### Full Sample (2005 - 2019) {.tabset}
+
+#### Levels {.tabset}
+
+##### 2y
+
+```{r simple regression individual 2, cache = T}
+library(stargazer)
+library(sandwich)
+
+lm2_indiv1 <- lm(ILSBEI2 ~ EUR_CDS, data = US_data)
+lm2_indiv2 <- lm(swap2 ~ EUR_CDS, data = US_data)
+lm2_indiv3 <- lm(tsy2 ~ EUR_CDS, data = US_data)
+lm2_indiv4 <- lm(tips2 ~ EUR_CDS, data = US_data)
+
+stargazer(lm2_indiv1, lm2_indiv2, lm2_indiv3, lm2_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2_indiv1))),
+            sqrt(diag(NeweyWest(lm2_indiv2))),
+            sqrt(diag(NeweyWest(lm2_indiv3))),
+            sqrt(diag(NeweyWest(lm2_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm2_indiv1 <- lm(ILSBEI2 ~ Debt_growth, data = US_data)
+lm2_indiv2 <- lm(swap2  ~ Debt_growth, data = US_data)
+lm2_indiv3 <- lm(tsy2  ~ Debt_growth, data = US_data)
+lm2_indiv4 <- lm(tips2 ~ Debt_growth, data = US_data)
+
+stargazer(lm2_indiv1, lm2_indiv2, lm2_indiv3, lm2_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2_indiv1))),
+            sqrt(diag(NeweyWest(lm2_indiv2))),
+            sqrt(diag(NeweyWest(lm2_indiv3))),
+            sqrt(diag(NeweyWest(lm2_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on debt growth",
+          omit.stat = c("f", "ser"))
+
+
+
+lm2_indiv1 <- lm(ILSBEI2 ~ Debt_growth_yoy, data = US_data)
+lm2_indiv2 <- lm(swap2 ~ Debt_growth_yoy, data = US_data)
+lm2_indiv3 <- lm(tsy2 ~ Debt_growth_yoy, data = US_data)
+lm2_indiv4 <- lm(tips2 ~ Debt_growth_yoy, data = US_data)
+
+stargazer(lm2_indiv1, lm2_indiv2, lm2_indiv3, lm2_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2_indiv1))),
+            sqrt(diag(NeweyWest(lm2_indiv2))),
+            sqrt(diag(NeweyWest(lm2_indiv3))),
+            sqrt(diag(NeweyWest(lm2_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on Debt growth (yoy)",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm2_indiv1 <- lm(ILSBEI2 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm2_indiv2 <- lm(swap2  ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm2_indiv3 <- lm(tsy2  ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm2_indiv4 <- lm(tips2 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm2_indiv5 <- lm(ILSBEI2 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm2_indiv6 <- lm(swap2 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm2_indiv7 <- lm(tsy2  ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm2_indiv8 <- lm(tips2 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+
+
+stargazer(lm2_indiv1, lm2_indiv2, lm2_indiv3, lm2_indiv4,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2_indiv1))),
+            sqrt(diag(NeweyWest(lm2_indiv2))),
+            sqrt(diag(NeweyWest(lm2_indiv3))),
+            sqrt(diag(NeweyWest(lm2_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+
+stargazer(lm2_indiv5, lm2_indiv6, lm2_indiv7, lm2_indiv8,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2_indiv5))),
+            sqrt(diag(NeweyWest(lm2_indiv6))),
+            sqrt(diag(NeweyWest(lm2_indiv7))),
+            sqrt(diag(NeweyWest(lm2_indiv8)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+  
+
+```
+
+##### 3y
+
+```{r simple regression individual3, cache = T}
+library(stargazer)
+library(sandwich)
+
+lm3_indiv1 <- lm(ILSBEI3 ~ EUR_CDS, data = US_data)
+lm3_indiv2 <- lm(swap3 ~ EUR_CDS, data = US_data)
+lm3_indiv3 <- lm(tsy3 ~ EUR_CDS, data = US_data)
+lm3_indiv4 <- lm(tips3 ~ EUR_CDS, data = US_data)
+
+stargazer(lm3_indiv1, lm3_indiv2, lm3_indiv3, lm3_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm3_indiv1))),
+            sqrt(diag(NeweyWest(lm3_indiv2))),
+            sqrt(diag(NeweyWest(lm3_indiv3))),
+            sqrt(diag(NeweyWest(lm3_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm3_indiv1 <- lm(ILSBEI3 ~ Debt_growth, data = US_data)
+lm3_indiv2 <- lm(swap3  ~ Debt_growth, data = US_data)
+lm3_indiv3 <- lm(tsy3  ~ Debt_growth, data = US_data)
+lm3_indiv4 <- lm(tips3 ~ Debt_growth, data = US_data)
+
+stargazer(lm3_indiv1, lm3_indiv2, lm3_indiv3, lm3_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm3_indiv1))),
+            sqrt(diag(NeweyWest(lm3_indiv2))),
+            sqrt(diag(NeweyWest(lm3_indiv3))),
+            sqrt(diag(NeweyWest(lm3_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on debt growth",
+          omit.stat = c("f", "ser"))
+
+
+
+lm3_indiv1 <- lm(ILSBEI3 ~ Debt_growth_yoy, data = US_data)
+lm3_indiv2 <- lm(swap3 ~ Debt_growth_yoy, data = US_data)
+lm3_indiv3 <- lm(tsy3 ~ Debt_growth_yoy, data = US_data)
+lm3_indiv4 <- lm(tips3 ~ Debt_growth_yoy, data = US_data)
+
+stargazer(lm3_indiv1, lm3_indiv2, lm3_indiv3, lm3_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm3_indiv1))),
+            sqrt(diag(NeweyWest(lm3_indiv2))),
+            sqrt(diag(NeweyWest(lm3_indiv3))),
+            sqrt(diag(NeweyWest(lm3_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on Debt growth (yoy)",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm3_indiv1 <- lm(ILSBEI3 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm3_indiv2 <- lm(swap3  ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm3_indiv3 <- lm(tsy3  ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm3_indiv4 <- lm(tips3 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm3_indiv5 <- lm(ILSBEI3 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm3_indiv6 <- lm(swap3 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm3_indiv7 <- lm(tsy3  ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm3_indiv8 <- lm(tips3 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+
+
+stargazer(lm3_indiv1, lm3_indiv2, lm3_indiv3, lm3_indiv4,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm3_indiv1))),
+            sqrt(diag(NeweyWest(lm3_indiv2))),
+            sqrt(diag(NeweyWest(lm3_indiv3))),
+            sqrt(diag(NeweyWest(lm3_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+
+stargazer(lm3_indiv5, lm3_indiv6, lm3_indiv7, lm3_indiv8,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm3_indiv5))),
+            sqrt(diag(NeweyWest(lm3_indiv6))),
+            sqrt(diag(NeweyWest(lm3_indiv7))),
+            sqrt(diag(NeweyWest(lm3_indiv8)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+  
+
+```
+
+##### 5y
+
+```{r simple regression individual 5, cache = T}
+library(stargazer)
+library(sandwich)
+
+lm5_indiv1 <- lm(ILSBEI5 ~ EUR_CDS, data = US_data)
+lm5_indiv2 <- lm(swap5 ~ EUR_CDS, data = US_data)
+lm5_indiv3 <- lm(tsy5 ~ EUR_CDS, data = US_data)
+lm5_indiv4 <- lm(tips5 ~ EUR_CDS, data = US_data)
+
+stargazer(lm5_indiv1, lm5_indiv2, lm5_indiv3, lm5_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm5_indiv1))),
+            sqrt(diag(NeweyWest(lm5_indiv2))),
+            sqrt(diag(NeweyWest(lm5_indiv3))),
+            sqrt(diag(NeweyWest(lm5_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm5_indiv1 <- lm(ILSBEI5 ~ Debt_growth, data = US_data)
+lm5_indiv2 <- lm(swap5  ~ Debt_growth, data = US_data)
+lm5_indiv3 <- lm(tsy5  ~ Debt_growth, data = US_data)
+lm5_indiv4 <- lm(tips5 ~ Debt_growth, data = US_data)
+
+stargazer(lm5_indiv1, lm5_indiv2, lm5_indiv3, lm5_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm5_indiv1))),
+            sqrt(diag(NeweyWest(lm5_indiv2))),
+            sqrt(diag(NeweyWest(lm5_indiv3))),
+            sqrt(diag(NeweyWest(lm5_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on debt growth",
+          omit.stat = c("f", "ser"))
+
+
+
+lm5_indiv1 <- lm(ILSBEI5 ~ Debt_growth_yoy, data = US_data)
+lm5_indiv2 <- lm(swap5 ~ Debt_growth_yoy, data = US_data)
+lm5_indiv3 <- lm(tsy5 ~ Debt_growth_yoy, data = US_data)
+lm5_indiv4 <- lm(tips5 ~ Debt_growth_yoy, data = US_data)
+
+stargazer(lm5_indiv1, lm5_indiv2, lm5_indiv3, lm5_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm5_indiv1))),
+            sqrt(diag(NeweyWest(lm5_indiv2))),
+            sqrt(diag(NeweyWest(lm5_indiv3))),
+            sqrt(diag(NeweyWest(lm5_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on Debt growth (yoy)",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm5_indiv1 <- lm(ILSBEI5 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm5_indiv2 <- lm(swap5  ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm5_indiv3 <- lm(tsy5  ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm5_indiv4 <- lm(tips5 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm5_indiv5 <- lm(ILSBEI5 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm5_indiv6 <- lm(swap5 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm5_indiv7 <- lm(tsy5  ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm5_indiv8 <- lm(tips5 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+
+
+stargazer(lm5_indiv1, lm5_indiv2, lm5_indiv3, lm5_indiv4,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm5_indiv1))),
+            sqrt(diag(NeweyWest(lm5_indiv2))),
+            sqrt(diag(NeweyWest(lm5_indiv3))),
+            sqrt(diag(NeweyWest(lm5_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+
+stargazer(lm5_indiv5, lm5_indiv6, lm5_indiv7, lm5_indiv8,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm5_indiv5))),
+            sqrt(diag(NeweyWest(lm5_indiv6))),
+            sqrt(diag(NeweyWest(lm5_indiv7))),
+            sqrt(diag(NeweyWest(lm5_indiv8)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+  
+
+```
+
+##### 7y
+
+```{r simple regression individual 7, cache = T}
+library(stargazer)
+library(sandwich)
+
+lm7_indiv1 <- lm(ILSBEI7 ~ EUR_CDS, data = US_data)
+lm7_indiv2 <- lm(swap7 ~ EUR_CDS, data = US_data)
+lm7_indiv3 <- lm(tsy7 ~ EUR_CDS, data = US_data)
+lm7_indiv4 <- lm(tips7 ~ EUR_CDS, data = US_data)
+
+stargazer(lm7_indiv1, lm7_indiv2, lm7_indiv3, lm7_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm7_indiv1))),
+            sqrt(diag(NeweyWest(lm7_indiv2))),
+            sqrt(diag(NeweyWest(lm7_indiv3))),
+            sqrt(diag(NeweyWest(lm7_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm7_indiv1 <- lm(ILSBEI7 ~ Debt_growth, data = US_data)
+lm7_indiv2 <- lm(swap7  ~ Debt_growth, data = US_data)
+lm7_indiv3 <- lm(tsy7  ~ Debt_growth, data = US_data)
+lm7_indiv4 <- lm(tips7 ~ Debt_growth, data = US_data)
+
+stargazer(lm7_indiv1, lm7_indiv2, lm7_indiv3, lm7_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm7_indiv1))),
+            sqrt(diag(NeweyWest(lm7_indiv2))),
+            sqrt(diag(NeweyWest(lm7_indiv3))),
+            sqrt(diag(NeweyWest(lm7_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on debt growth",
+          omit.stat = c("f", "ser"))
+
+
+
+lm7_indiv1 <- lm(ILSBEI7 ~ Debt_growth_yoy, data = US_data)
+lm7_indiv2 <- lm(swap7 ~ Debt_growth_yoy, data = US_data)
+lm7_indiv3 <- lm(tsy7 ~ Debt_growth_yoy, data = US_data)
+lm7_indiv4 <- lm(tips7 ~ Debt_growth_yoy, data = US_data)
+
+stargazer(lm7_indiv1, lm7_indiv2, lm7_indiv3, lm7_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm7_indiv1))),
+            sqrt(diag(NeweyWest(lm7_indiv2))),
+            sqrt(diag(NeweyWest(lm7_indiv3))),
+            sqrt(diag(NeweyWest(lm7_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on Debt growth (yoy)",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm7_indiv1 <- lm(ILSBEI7 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm7_indiv2 <- lm(swap7  ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm7_indiv3 <- lm(tsy7  ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm7_indiv4 <- lm(tips7 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm7_indiv5 <- lm(ILSBEI7 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm7_indiv6 <- lm(swap7 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm7_indiv7 <- lm(tsy7  ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm7_indiv8 <- lm(tips7 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+
+
+stargazer(lm7_indiv1, lm7_indiv2, lm7_indiv3, lm7_indiv4,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm7_indiv1))),
+            sqrt(diag(NeweyWest(lm7_indiv2))),
+            sqrt(diag(NeweyWest(lm7_indiv3))),
+            sqrt(diag(NeweyWest(lm7_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+
+stargazer(lm7_indiv5, lm7_indiv6, lm7_indiv7, lm7_indiv8,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm7_indiv5))),
+            sqrt(diag(NeweyWest(lm7_indiv6))),
+            sqrt(diag(NeweyWest(lm7_indiv7))),
+            sqrt(diag(NeweyWest(lm7_indiv8)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+  
+
+```
+
+##### 10y
+
+```{r simple regression individual 10, cache = T}
+library(stargazer)
+library(sandwich)
+
+lm10_indiv1 <- lm(ILSBEI10 ~ EUR_CDS, data = US_data)
+lm10_indiv2 <- lm(swap10 ~ EUR_CDS, data = US_data)
+lm10_indiv3 <- lm(tsy10 ~ EUR_CDS, data = US_data)
+lm10_indiv4 <- lm(tips10 ~ EUR_CDS, data = US_data)
+
+stargazer(lm10_indiv1, lm10_indiv2, lm10_indiv3, lm10_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm10_indiv1))),
+            sqrt(diag(NeweyWest(lm10_indiv2))),
+            sqrt(diag(NeweyWest(lm10_indiv3))),
+            sqrt(diag(NeweyWest(lm10_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm10_indiv1 <- lm(ILSBEI10 ~ Debt_growth, data = US_data)
+lm10_indiv2 <- lm(swap10  ~ Debt_growth, data = US_data)
+lm10_indiv3 <- lm(tsy10  ~ Debt_growth, data = US_data)
+lm10_indiv4 <- lm(tips10 ~ Debt_growth, data = US_data)
+
+stargazer(lm10_indiv1, lm10_indiv2, lm10_indiv3, lm10_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm10_indiv1))),
+            sqrt(diag(NeweyWest(lm10_indiv2))),
+            sqrt(diag(NeweyWest(lm10_indiv3))),
+            sqrt(diag(NeweyWest(lm10_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on debt growth",
+          omit.stat = c("f", "ser"))
+
+
+
+lm10_indiv1 <- lm(ILSBEI10 ~ Debt_growth_yoy, data = US_data)
+lm10_indiv2 <- lm(swap10 ~ Debt_growth_yoy, data = US_data)
+lm10_indiv3 <- lm(tsy10 ~ Debt_growth_yoy, data = US_data)
+lm10_indiv4 <- lm(tips10 ~ Debt_growth_yoy, data = US_data)
+
+stargazer(lm10_indiv1, lm10_indiv2, lm10_indiv3, lm10_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm10_indiv1))),
+            sqrt(diag(NeweyWest(lm10_indiv2))),
+            sqrt(diag(NeweyWest(lm10_indiv3))),
+            sqrt(diag(NeweyWest(lm10_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on Debt growth (yoy)",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm10_indiv1 <- lm(ILSBEI10 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm10_indiv2 <- lm(swap10  ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm10_indiv3 <- lm(tsy10  ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm10_indiv4 <- lm(tips10 ~ EUR_CDS + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm10_indiv5 <- lm(ILSBEI10 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm10_indiv6 <- lm(swap10 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm10_indiv7 <- lm(tsy10  ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+lm10_indiv8 <- lm(tips10 ~ Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data)
+
+
+stargazer(lm10_indiv1, lm10_indiv2, lm10_indiv3, lm10_indiv4,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm10_indiv1))),
+            sqrt(diag(NeweyWest(lm10_indiv2))),
+            sqrt(diag(NeweyWest(lm10_indiv3))),
+            sqrt(diag(NeweyWest(lm10_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+
+stargazer(lm10_indiv5, lm10_indiv6, lm10_indiv7, lm10_indiv8,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm10_indiv5))),
+            sqrt(diag(NeweyWest(lm10_indiv6))),
+            sqrt(diag(NeweyWest(lm10_indiv7))),
+            sqrt(diag(NeweyWest(lm10_indiv8)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+  
+
+```
+
+#### First Difference {.tabset}
+
+##### 2y
+
+```{r simple regression individual 2 diff, cache = T}
+diff <- function(x){x - dplyr::lag(x)}
+library(stargazer)
+library(sandwich)
+
+lm2_indiv1 <- lm(diff(ILSBEI2) ~ diff(EUR_CDS), data = US_data)
+lm2_indiv2 <- lm(diff(swap2) ~ diff(EUR_CDS), data = US_data)
+lm2_indiv3 <- lm(diff(tsy2) ~ diff(EUR_CDS), data = US_data)
+lm2_indiv4 <- lm(diff(tips2) ~ diff(EUR_CDS), data = US_data)
+
+stargazer(lm2_indiv1, lm2_indiv2, lm2_indiv3, lm2_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2_indiv1))),
+            sqrt(diag(NeweyWest(lm2_indiv2))),
+            sqrt(diag(NeweyWest(lm2_indiv3))),
+            sqrt(diag(NeweyWest(lm2_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm2_indiv1 <- lm(diff(ILSBEI2) ~ Debt_growth, data = US_data)
+lm2_indiv2 <- lm(diff(swap2)  ~ Debt_growth, data = US_data)
+lm2_indiv3 <- lm(diff(tsy2)  ~ Debt_growth, data = US_data)
+lm2_indiv4 <- lm(diff(tips2) ~ Debt_growth, data = US_data)
+
+stargazer(lm2_indiv1, lm2_indiv2, lm2_indiv3, lm2_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2_indiv1))),
+            sqrt(diag(NeweyWest(lm2_indiv2))),
+            sqrt(diag(NeweyWest(lm2_indiv3))),
+            sqrt(diag(NeweyWest(lm2_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on debt growth",
+          omit.stat = c("f", "ser"))
+
+
+
+
+
+lm2_indiv1 <- lm(diff(ILSBEI2) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm2_indiv2 <- lm(diff(swap2)  ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm2_indiv3 <- lm(diff(tsy2)  ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm2_indiv4 <- lm(diff(tips2) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm2_indiv5 <- lm(diff(ILSBEI2) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm2_indiv6 <- lm(diff(swap2) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm2_indiv7 <- lm(diff(tsy2)  ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm2_indiv8 <- lm(diff(tips2) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+
+
+stargazer(lm2_indiv1, lm2_indiv2, lm2_indiv3, lm2_indiv4,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2_indiv1))),
+            sqrt(diag(NeweyWest(lm2_indiv2))),
+            sqrt(diag(NeweyWest(lm2_indiv3))),
+            sqrt(diag(NeweyWest(lm2_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+
+stargazer(lm2_indiv5, lm2_indiv6, lm2_indiv7, lm2_indiv8,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm2_indiv5))),
+            sqrt(diag(NeweyWest(lm2_indiv6))),
+            sqrt(diag(NeweyWest(lm2_indiv7))),
+            sqrt(diag(NeweyWest(lm2_indiv8)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+  
+
+```
+
+##### 3y
+
+```{r simple regression individual 3 diff, cache = T}
+library(stargazer)
+library(sandwich)
+diff <- function(x){x - dplyr::lag(x)}
+lm3_indiv1 <- lm(diff(ILSBEI3) ~ diff(EUR_CDS), data = US_data)
+lm3_indiv2 <- lm(diff(swap3) ~ diff(EUR_CDS), data = US_data)
+lm3_indiv3 <- lm(diff(tsy3) ~ diff(EUR_CDS), data = US_data)
+lm3_indiv4 <- lm(diff(tips3) ~ diff(EUR_CDS), data = US_data)
+
+stargazer(lm3_indiv1, lm3_indiv2, lm3_indiv3, lm3_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm3_indiv1))),
+            sqrt(diag(NeweyWest(lm3_indiv2))),
+            sqrt(diag(NeweyWest(lm3_indiv3))),
+            sqrt(diag(NeweyWest(lm3_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm3_indiv1 <- lm(diff(ILSBEI3) ~ Debt_growth, data = US_data)
+lm3_indiv2 <- lm(diff(swap3)  ~ Debt_growth, data = US_data)
+lm3_indiv3 <- lm(diff(tsy3)  ~ Debt_growth, data = US_data)
+lm3_indiv4 <- lm(diff(tips3) ~ Debt_growth, data = US_data)
+
+stargazer(lm3_indiv1, lm3_indiv2, lm3_indiv3, lm3_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm3_indiv1))),
+            sqrt(diag(NeweyWest(lm3_indiv2))),
+            sqrt(diag(NeweyWest(lm3_indiv3))),
+            sqrt(diag(NeweyWest(lm3_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on debt growth",
+          omit.stat = c("f", "ser"))
+
+
+
+
+
+
+lm3_indiv1 <- lm(diff(ILSBEI3) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm3_indiv2 <- lm(diff(swap3)  ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm3_indiv3 <- lm(diff(tsy3)  ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm3_indiv4 <- lm(diff(tips3) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm3_indiv5 <- lm(diff(ILSBEI3) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm3_indiv6 <- lm(diff(swap3) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm3_indiv7 <- lm(diff(tsy3)  ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm3_indiv8 <- lm(diff(tips3) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+
+
+stargazer(lm3_indiv1, lm3_indiv2, lm3_indiv3, lm3_indiv4,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm3_indiv1))),
+            sqrt(diag(NeweyWest(lm3_indiv2))),
+            sqrt(diag(NeweyWest(lm3_indiv3))),
+            sqrt(diag(NeweyWest(lm3_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+
+stargazer(lm3_indiv5, lm3_indiv6, lm3_indiv7, lm3_indiv8,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm3_indiv5))),
+            sqrt(diag(NeweyWest(lm3_indiv6))),
+            sqrt(diag(NeweyWest(lm3_indiv7))),
+            sqrt(diag(NeweyWest(lm3_indiv8)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+  
+
+```
+
+##### 5y
+
+```{r simple regression individual 5 diff, cache = T}
+library(stargazer)
+library(sandwich)
+diff <- function(x){x - dplyr::lag(x)}
+lm5_indiv1 <- lm(diff(ILSBEI5) ~ diff(EUR_CDS), data = US_data)
+lm5_indiv2 <- lm(diff(swap5) ~ diff(EUR_CDS), data = US_data)
+lm5_indiv3 <- lm(diff(tsy5) ~ diff(EUR_CDS), data = US_data)
+lm5_indiv4 <- lm(diff(tips5) ~ diff(EUR_CDS), data = US_data)
+
+stargazer(lm5_indiv1, lm5_indiv2, lm5_indiv3, lm5_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm5_indiv1))),
+            sqrt(diag(NeweyWest(lm5_indiv2))),
+            sqrt(diag(NeweyWest(lm5_indiv3))),
+            sqrt(diag(NeweyWest(lm5_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm5_indiv1 <- lm(diff(ILSBEI5) ~ Debt_growth, data = US_data)
+lm5_indiv2 <- lm(diff(swap5)  ~ Debt_growth, data = US_data)
+lm5_indiv3 <- lm(diff(tsy5)  ~ Debt_growth, data = US_data)
+lm5_indiv4 <- lm(diff(tips5) ~ Debt_growth, data = US_data)
+
+stargazer(lm5_indiv1, lm5_indiv2, lm5_indiv3, lm5_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm5_indiv1))),
+            sqrt(diag(NeweyWest(lm5_indiv2))),
+            sqrt(diag(NeweyWest(lm5_indiv3))),
+            sqrt(diag(NeweyWest(lm5_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on debt growth",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm5_indiv1 <- lm(diff(ILSBEI5) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm5_indiv2 <- lm(diff(swap5)  ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm5_indiv3 <- lm(diff(tsy5)  ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm5_indiv4 <- lm(diff(tips5) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm5_indiv5 <- lm(diff(ILSBEI5) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm5_indiv6 <- lm(diff(swap5) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm5_indiv7 <- lm(diff(tsy5)  ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm5_indiv8 <- lm(diff(tips5) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+
+
+stargazer(lm5_indiv1, lm5_indiv2, lm5_indiv3, lm5_indiv4,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm5_indiv1))),
+            sqrt(diag(NeweyWest(lm5_indiv2))),
+            sqrt(diag(NeweyWest(lm5_indiv3))),
+            sqrt(diag(NeweyWest(lm5_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+
+stargazer(lm5_indiv5, lm5_indiv6, lm5_indiv7, lm5_indiv8,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm5_indiv5))),
+            sqrt(diag(NeweyWest(lm5_indiv6))),
+            sqrt(diag(NeweyWest(lm5_indiv7))),
+            sqrt(diag(NeweyWest(lm5_indiv8)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+  
+
+```
+
+##### 7y
+
+```{r simple regression individual 7 diff, cache = T}
+library(stargazer)
+library(sandwich)
+diff <- function(x){x - dplyr::lag(x)}
+lm7_indiv1 <- lm(diff(ILSBEI7) ~ diff(EUR_CDS), data = US_data)
+lm7_indiv2 <- lm(diff(swap7) ~ diff(EUR_CDS), data = US_data)
+lm7_indiv3 <- lm(diff(tsy7) ~ diff(EUR_CDS), data = US_data)
+lm7_indiv4 <- lm(diff(tips7) ~ diff(EUR_CDS), data = US_data)
+
+stargazer(lm7_indiv1, lm7_indiv2, lm7_indiv3, lm7_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm7_indiv1))),
+            sqrt(diag(NeweyWest(lm7_indiv2))),
+            sqrt(diag(NeweyWest(lm7_indiv3))),
+            sqrt(diag(NeweyWest(lm7_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm7_indiv1 <- lm(diff(ILSBEI7) ~ Debt_growth, data = US_data)
+lm7_indiv2 <- lm(diff(swap7)  ~ Debt_growth, data = US_data)
+lm7_indiv3 <- lm(diff(tsy7)  ~ Debt_growth, data = US_data)
+lm7_indiv4 <- lm(diff(tips7) ~ Debt_growth, data = US_data)
+
+stargazer(lm7_indiv1, lm7_indiv2, lm7_indiv3, lm7_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm7_indiv1))),
+            sqrt(diag(NeweyWest(lm7_indiv2))),
+            sqrt(diag(NeweyWest(lm7_indiv3))),
+            sqrt(diag(NeweyWest(lm7_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on debt growth",
+          omit.stat = c("f", "ser"))
+
+
+
+lm7_indiv1 <- lm(diff(ILSBEI7) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm7_indiv2 <- lm(diff(swap7)  ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm7_indiv3 <- lm(diff(tsy7)  ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm7_indiv4 <- lm(diff(tips7) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm7_indiv5 <- lm(diff(ILSBEI7) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm7_indiv6 <- lm(diff(swap7) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm7_indiv7 <- lm(diff(tsy7)  ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm7_indiv8 <- lm(diff(tips7) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+
+
+stargazer(lm7_indiv1, lm7_indiv2, lm7_indiv3, lm7_indiv4,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm7_indiv1))),
+            sqrt(diag(NeweyWest(lm7_indiv2))),
+            sqrt(diag(NeweyWest(lm7_indiv3))),
+            sqrt(diag(NeweyWest(lm7_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+
+stargazer(lm7_indiv5, lm7_indiv6, lm7_indiv7, lm7_indiv8,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm7_indiv5))),
+            sqrt(diag(NeweyWest(lm7_indiv6))),
+            sqrt(diag(NeweyWest(lm7_indiv7))),
+            sqrt(diag(NeweyWest(lm7_indiv8)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+  
+
+```
+
+##### 10y
+
+```{r simple regression individual 10 diff, cache = T}
+library(stargazer)
+library(sandwich)
+diff <- function(x){x - dplyr::lag(x)}
+lm10_indiv1 <- lm(diff(ILSBEI10) ~ diff(EUR_CDS), data = US_data)
+lm10_indiv2 <- lm(diff(swap10) ~ diff(EUR_CDS), data = US_data)
+lm10_indiv3 <- lm(diff(tsy10) ~ diff(EUR_CDS), data = US_data)
+lm10_indiv4 <- lm(diff(tips10) ~ diff(EUR_CDS), data = US_data)
+
+stargazer(lm10_indiv1, lm10_indiv2, lm10_indiv3, lm10_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm10_indiv1))),
+            sqrt(diag(NeweyWest(lm10_indiv2))),
+            sqrt(diag(NeweyWest(lm10_indiv3))),
+            sqrt(diag(NeweyWest(lm10_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on 5y EUR denominated CDS level",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm10_indiv1 <- lm(diff(ILSBEI10) ~ Debt_growth, data = US_data)
+lm10_indiv2 <- lm(diff(swap10)  ~ Debt_growth, data = US_data)
+lm10_indiv3 <- lm(diff(tsy10)  ~ Debt_growth, data = US_data)
+lm10_indiv4 <- lm(diff(tips10) ~ Debt_growth, data = US_data)
+
+stargazer(lm10_indiv1, lm10_indiv2, lm10_indiv3, lm10_indiv4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm10_indiv1))),
+            sqrt(diag(NeweyWest(lm10_indiv2))),
+            sqrt(diag(NeweyWest(lm10_indiv3))),
+            sqrt(diag(NeweyWest(lm10_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on debt growth",
+          omit.stat = c("f", "ser"))
+
+
+
+
+lm10_indiv1 <- lm(diff(ILSBEI10) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm10_indiv2 <- lm(diff(swap10)  ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm10_indiv3 <- lm(diff(tsy10)  ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm10_indiv4 <- lm(diff(tips10) ~ diff(EUR_CDS) + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm10_indiv5 <- lm(diff(ILSBEI10) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm10_indiv6 <- lm(diff(swap10) ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm10_indiv7 <- lm(diff(tsy10)  ~ Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+lm10_indiv8 <- lm(diff(tips10) ~ Debt_growth+ diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data)
+
+
+stargazer(lm10_indiv1, lm10_indiv2, lm10_indiv3, lm10_indiv4,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm10_indiv1))),
+            sqrt(diag(NeweyWest(lm10_indiv2))),
+            sqrt(diag(NeweyWest(lm10_indiv3))),
+            sqrt(diag(NeweyWest(lm10_indiv4)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+
+stargazer(lm10_indiv5, lm10_indiv6, lm10_indiv7, lm10_indiv8,
+          type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(lm10_indiv5))),
+            sqrt(diag(NeweyWest(lm10_indiv6))),
+            sqrt(diag(NeweyWest(lm10_indiv7))),
+            sqrt(diag(NeweyWest(lm10_indiv8)))
+            ),
+          title = "Regressions of ILSBEI components on controls",
+          omit.stat = c("f", "ser"))
+  
+
+```
+
+## Inflation regressions {.tabset}
+
+This section tests whether the default effects go through inflation. The approach is as follows:
+
+1. Do a predictive regression of inflation onto debt growth and CDS, and possibly other controls. These variables are considered default risk proxies (column 1).
+$$
+  \frac{1}{h}\sum_{i=1}^h\pi_{t+i} = a_h + b_h^{(CDS)} CDS_t +b_h D_t+ b_h^{(X)'} X_t +\varepsilon_{t+h}
+$$
+
+2. Regress the ILSBEI spread onto the fitted values of the regression and the controls (column 2). 
+
+3. Test whether the individual CDS and Debt growth add anything to the fit. We regress the ILSBEI residual from the previous regression onto CDS, Debt growth, and controls (column 4).
+
+
+Column 3 presents the regression of ILSBEI with individual default proxies and controls instead of the fitted values from the first stage. Standard errors are Newey-West but do not adjust for the different steps in the estimation. There should be a way to do a F-test directly but I didn't know how to do that with Newey-West. 
+
+
+### Full Sample (2005 - 2019) {.tabset}
+
+#### Levels{.tabset}
+
+##### No Controls
+
+```{r inflation reg full sample levels, cache = T}
+
+library(stargazer)
+library(sandwich)
+
+for(i in c(1,4,12)){
+  inflation_lead  <- dplyr::lead(
+    zoo::rollmean(US_data$inflation_month, k = i, align = "right", fill = NA), 
+    i)
+  
+  assign(paste0("infla_fcst",i), value = lm(inflation_lead ~ EUR_CDS +
+                      Debt_growth, data = US_data))
+  fitted_fcst     <- 
+    get(paste0("infla_fcst",i))$coefficients[2] * US_data$EUR_CDS +
+    get(paste0("infla_fcst",i))$coefficients[3] * US_data$Debt_growth
+  
+  assign(paste0("lm5_",i), 
+         value = lm(ILSBEI5 ~ EUR_CDS + Debt_growth, data = US_data))
+  assign(paste0("lm5_bis",i), 
+         value = lm(ILSBEI5 ~ fitted_fcst, data = US_data))
+         
+  ILSBEI5_res     <- US_data$ILSBEI5 - get(paste0("lm5_bis",i))$fitted.values
+  assign(paste0("lm5_ter",i), 
+         value = lm(ILSBEI5_res ~ EUR_CDS + Debt_growth, data = US_data))
+  
+}
+
+stargazer(infla_fcst1, lm5_bis1, lm5_1, lm5_ter1, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(infla_fcst1))),
+            sqrt(diag(NeweyWest(lm5_bis1))),
+            sqrt(diag(NeweyWest(lm5_1))),
+            sqrt(diag(NeweyWest(lm5_ter1)))
+            ),
+          title = "Regressions of 5y ILSBEI credit risk components and inflation forecast (1-month ahead)",
+          omit.stat = c("f", "ser")
+          )
+
+stargazer(infla_fcst4, lm5_bis4, lm5_4, lm5_ter4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(infla_fcst4))),
+            sqrt(diag(NeweyWest(lm5_bis4))),
+            sqrt(diag(NeweyWest(lm5_4))),
+            sqrt(diag(NeweyWest(lm5_ter4)))
+            ),
+          title = "Regressions of 5y ILSBEI credit risk components and inflation forecast (1-quarter ahead avg)",
+          omit.stat = c("f", "ser")
+          )
+
+stargazer(infla_fcst12, lm5_bis12, lm5_12, lm5_ter12, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(infla_fcst12))),
+            sqrt(diag(NeweyWest(lm5_bis12))),
+            sqrt(diag(NeweyWest(lm5_12))),
+            sqrt(diag(NeweyWest(lm5_ter12)))
+            ),
+          title = "Regressions of 5y ILSBEI credit risk components and inflation forecast (1-year ahead avg)",
+          omit.stat = c("f", "ser")
+          )
+
+
+
+
+
+```
+
+
+##### Non-transformed Controls
+
+```{r inflation reg with controls, cache = T}
+i <- 1
+inflation_lead  <- dplyr::lead(
+  zoo::rollmean(US_data$inflation_month, k = i, align = "right", fill = NA), 
+  i)
+
+assign(paste0("infla_fcst",i), 
+       value = lm(inflation_lead ~ EUR_CDS + Debt_growth+ vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data))
+fitted_fcst     <- 
+  get(paste0("infla_fcst",i))$coefficients[2] * US_data$EUR_CDS +
+  get(paste0("infla_fcst",i))$coefficients[3] * US_data$Debt_growth + 
+  get(paste0("infla_fcst",i))$coefficients[4] * US_data$vix +
+  get(paste0("infla_fcst",i))$coefficients[5] * US_data$libor_ois +
+  get(paste0("infla_fcst",i))$coefficients[6] * US_data$hpw_noise +
+  get(paste0("infla_fcst",i))$coefficients[7] * US_data$tips_noise +
+  get(paste0("infla_fcst",i))$coefficients[8] * US_data$Off_On_run
+
+assign(paste0("lm5_",i), 
+       value = lm(ILSBEI5 ~ EUR_CDS + Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data))
+assign(paste0("lm5_bis",i), 
+       value = lm(ILSBEI5 ~ fitted_fcst + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data))
+
+ILSBEI5_res     <- US_data$ILSBEI5 - get(paste0("lm5_bis",i))$fitted.values
+assign(paste0("lm5_ter",i), 
+       value = lm(ILSBEI5_res ~ EUR_CDS + Debt_growth + vix + libor_ois + hpw_noise + tips_noise + Off_On_run, data = US_data))
+
+stargazer(infla_fcst1, lm5_bis1, lm5_1, lm5_ter1, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(infla_fcst1))),
+            sqrt(diag(NeweyWest(lm5_bis1))),
+            sqrt(diag(NeweyWest(lm5_1))),
+            sqrt(diag(NeweyWest(lm5_ter1)))
+            ),
+          title = "Regressions of 5y ILSBEI credit risk components and inflation forecast (1-month ahead)",
+          omit.stat = c("f", "ser")
+          )
+  
+  
+  
+```
+
+
+##### Transformed Controls
+
+```{r inflation reg with controls transformed, cache = T}
+i <- 1
+inflation_lead  <- dplyr::lead(
+  zoo::rollmean(US_data$inflation_month, k = i, align = "right", fill = NA), 
+  i)
+
+assign(paste0("infla_fcst",i), 
+       value = lm(inflation_lead ~ EUR_CDS + Debt_growth + res_vix_CDS + res_libor_ois_CDS + res_hpw_noise_CDS + res_tips_noise_CDS + res_Off_On_run_CDS, data = US_data))
+fitted_fcst     <- 
+  get(paste0("infla_fcst",i))$coefficients[2] * US_data$EUR_CDS +
+  get(paste0("infla_fcst",i))$coefficients[3] * US_data$Debt_growth + 
+  get(paste0("infla_fcst",i))$coefficients[4] * US_data$res_vix_CDS +
+  get(paste0("infla_fcst",i))$coefficients[5] * US_data$res_libor_ois_CDS +
+  get(paste0("infla_fcst",i))$coefficients[6] * US_data$res_hpw_noise_CDS +
+  get(paste0("infla_fcst",i))$coefficients[7] * US_data$res_tips_noise_CDS +
+  get(paste0("infla_fcst",i))$coefficients[8] * US_data$res_Off_On_run_CDS
+
+assign(paste0("lm5_",i), 
+       value = lm(ILSBEI5 ~ EUR_CDS + Debt_growth + res_vix_CDS + res_libor_ois_CDS + res_hpw_noise_CDS + res_tips_noise_CDS + res_Off_On_run_CDS, data = US_data))
+assign(paste0("lm5_bis",i), 
+       value = lm(ILSBEI5 ~ fitted_fcst + res_vix_CDS + res_libor_ois_CDS + res_hpw_noise_CDS + res_tips_noise_CDS + res_Off_On_run_CDS, data = US_data))
+
+ILSBEI5_res     <- US_data$ILSBEI5 - get(paste0("lm5_bis",i))$fitted.values
+assign(paste0("lm5_ter",i), 
+       value = lm(ILSBEI5_res ~ EUR_CDS + Debt_growth + res_vix_CDS + res_libor_ois_CDS + res_hpw_noise_CDS + res_tips_noise_CDS + res_Off_On_run_CDS, data = US_data))
+
+stargazer(infla_fcst1, lm5_bis1, lm5_1, lm5_ter1, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(infla_fcst1))),
+            sqrt(diag(NeweyWest(lm5_bis1))),
+            sqrt(diag(NeweyWest(lm5_1))),
+            sqrt(diag(NeweyWest(lm5_ter1)))
+            ),
+          title = "Regressions of 5y ILSBEI credit risk components and inflation forecast (1-month ahead)",
+          omit.stat = c("f", "ser")
+          )
+  
+  
+  
+```
+
+#### First Difference{.tabset}
+
+##### No Controls
+```{r inflation reg full sample levels diff, cache = T}
+diff <- function(x){x - dplyr::lag(x)}
+library(stargazer)
+library(sandwich)
+
+for(i in c(1,4,12)){
+  inflation_lead  <- dplyr::lead(
+    zoo::rollmean(US_data$inflation_month, k = i, align = "right", fill = NA), 
+    i)
+  
+  assign(paste0("infla_fcst",i), value = lm(inflation_lead ~ diff(EUR_CDS) +
+                      Debt_growth, data = US_data))
+  fitted_fcst     <- 
+    get(paste0("infla_fcst",i))$coefficients[2] * diff(US_data$EUR_CDS) +
+    get(paste0("infla_fcst",i))$coefficients[3] * US_data$Debt_growth
+  
+  assign(paste0("lm5_",i), 
+         value = lm(diff(ILSBEI5) ~ diff(EUR_CDS) + Debt_growth, data = US_data))
+  assign(paste0("lm5_bis",i), 
+         value = lm(diff(ILSBEI5) ~ fitted_fcst, data = US_data))
+         
+  ILSBEI5_res     <- c(NA,
+                       get(paste0("lm5_bis",i))$residual)
+  assign(paste0("lm5_ter",i), 
+         value = lm(ILSBEI5_res ~ diff(EUR_CDS) + Debt_growth, data = US_data))
+  
+}
+
+stargazer(infla_fcst1, lm5_bis1, lm5_1, lm5_ter1, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(infla_fcst1))),
+            sqrt(diag(NeweyWest(lm5_bis1))),
+            sqrt(diag(NeweyWest(lm5_1))),
+            sqrt(diag(NeweyWest(lm5_ter1)))
+            ),
+          title = "Regressions of 5y ILSBEI credit risk components and inflation forecast (1-month ahead)",
+          omit.stat = c("f", "ser")
+          )
+
+stargazer(infla_fcst4, lm5_bis4, lm5_4, lm5_ter4, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(infla_fcst4))),
+            sqrt(diag(NeweyWest(lm5_bis4))),
+            sqrt(diag(NeweyWest(lm5_4))),
+            sqrt(diag(NeweyWest(lm5_ter4)))
+            ),
+          title = "Regressions of 5y ILSBEI credit risk components and inflation forecast (1-quarter ahead avg)",
+          omit.stat = c("f", "ser")
+          )
+
+stargazer(infla_fcst12, lm5_bis12, lm5_12, lm5_ter12, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(infla_fcst12))),
+            sqrt(diag(NeweyWest(lm5_bis12))),
+            sqrt(diag(NeweyWest(lm5_12))),
+            sqrt(diag(NeweyWest(lm5_ter12)))
+            ),
+          title = "Regressions of 5y ILSBEI credit risk components and inflation forecast (1-year ahead avg)",
+          omit.stat = c("f", "ser")
+          )
+
+
+
+
+
+```
+##### Non-transformed Controls
+
+```{r inflation reg with controls diff, cache = T}
+i <- 1
+inflation_lead  <- dplyr::lead(
+  zoo::rollmean(US_data$inflation_month, k = i, align = "right", fill = NA), 
+  i)
+
+assign(paste0("infla_fcst",i), 
+       value = lm(inflation_lead ~ diff(EUR_CDS) + Debt_growth+ diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data))
+fitted_fcst     <- 
+  get(paste0("infla_fcst",i))$coefficients[2] * diff(US_data$EUR_CDS) +
+  get(paste0("infla_fcst",i))$coefficients[3] * US_data$Debt_growth + 
+  get(paste0("infla_fcst",i))$coefficients[4] * diff(US_data$vix) +
+  get(paste0("infla_fcst",i))$coefficients[5] * diff(US_data$libor_ois) +
+  get(paste0("infla_fcst",i))$coefficients[6] * diff(US_data$hpw_noise) +
+  get(paste0("infla_fcst",i))$coefficients[7] * diff(US_data$tips_noise) +
+  get(paste0("infla_fcst",i))$coefficients[8] * diff(US_data$Off_On_run)
+
+assign(paste0("lm5_",i), 
+       value = lm(diff(ILSBEI5) ~ diff(EUR_CDS) + Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data))
+assign(paste0("lm5_bis",i), 
+       value = lm(diff(ILSBEI5) ~ fitted_fcst + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data))
+
+ILSBEI5_res     <- diff(US_data$ILSBEI5) - get(paste0("lm5_bis",i))$fitted.values
+assign(paste0("lm5_ter",i), 
+       value = lm(ILSBEI5_res ~ diff(EUR_CDS) + Debt_growth + diff(vix) + diff(libor_ois) + diff(hpw_noise) + diff(tips_noise) + diff(Off_On_run), data = US_data))
+
+stargazer(infla_fcst1, lm5_bis1, lm5_1, lm5_ter1, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(infla_fcst1))),
+            sqrt(diag(NeweyWest(lm5_bis1))),
+            sqrt(diag(NeweyWest(lm5_1))),
+            sqrt(diag(NeweyWest(lm5_ter1)))
+            ),
+          title = "Regressions of 5y ILSBEI credit risk components and inflation forecast (1-month ahead)",
+          omit.stat = c("f", "ser")
+          )
+  
+  
+  
+```
+
+##### Transformed Controls
+
+```{r inflation reg with controls diff transformed, cache = T}
+i <- 1
+inflation_lead  <- dplyr::lead(
+  zoo::rollmean(US_data$inflation_month, k = i, align = "right", fill = NA), 
+  i)
+
+assign(paste0("infla_fcst",i), 
+       value = lm(inflation_lead ~ diff(EUR_CDS) + Debt_growth + diff(res_vix_CDS) + diff(res_libor_ois_CDS) + diff(res_hpw_noise_CDS) + diff(res_tips_noise_CDS) + diff(res_Off_On_run_CDS), data = US_data))
+fitted_fcst     <- 
+  get(paste0("infla_fcst",i))$coefficients[2] * diff(US_data$EUR_CDS) +
+  get(paste0("infla_fcst",i))$coefficients[3] * US_data$Debt_growth + 
+  get(paste0("infla_fcst",i))$coefficients[4] * diff(US_data$res_vix_CDS) +
+  get(paste0("infla_fcst",i))$coefficients[5] * diff(US_data$res_libor_ois_CDS) +
+  get(paste0("infla_fcst",i))$coefficients[6] * diff(US_data$res_hpw_noise_CDS) +
+  get(paste0("infla_fcst",i))$coefficients[7] * diff(US_data$res_tips_noise_CDS) +
+  get(paste0("infla_fcst",i))$coefficients[8] * diff(US_data$res_Off_On_run_CDS)
+
+assign(paste0("lm5_",i), 
+       value = lm(diff(ILSBEI5) ~ diff(EUR_CDS) + Debt_growth + diff(res_vix_CDS) + diff(res_libor_ois_CDS) + diff(res_hpw_noise_CDS) + diff(res_tips_noise_CDS) + diff(res_Off_On_run_CDS), data = US_data))
+assign(paste0("lm5_bis",i), 
+       value = lm(diff(ILSBEI5) ~ fitted_fcst + diff(res_vix_CDS) + diff(res_libor_ois_CDS) + diff(res_hpw_noise_CDS) + diff(res_tips_noise_CDS) + diff(res_Off_On_run_CDS), data = US_data))
+
+ILSBEI5_res     <- diff(US_data$ILSBEI5) - get(paste0("lm5_bis",i))$fitted.values
+assign(paste0("lm5_ter",i), 
+       value = lm(ILSBEI5_res ~ diff(EUR_CDS) + Debt_growth + diff(res_vix_CDS) + diff(res_libor_ois_CDS) + diff(res_hpw_noise_CDS) + diff(res_tips_noise_CDS) + diff(res_Off_On_run_CDS), data = US_data))
+
+stargazer(infla_fcst1, lm5_bis1, lm5_1, lm5_ter1, type = "text",
+          se = list(
+            sqrt(diag(NeweyWest(infla_fcst1))),
+            sqrt(diag(NeweyWest(lm5_bis1))),
+            sqrt(diag(NeweyWest(lm5_1))),
+            sqrt(diag(NeweyWest(lm5_ter1)))
+            ),
+          title = "Regressions of 5y ILSBEI credit risk components and inflation forecast (1-month ahead)",
+          omit.stat = c("f", "ser")
+          )
+  
+  
+  
+```
+
+## Variables plots {.tabset}
+
+We consider the following controls:
+
+-   **vix**: the standard CBOE vix.
+-   **libor_ois**: the spread between LIBOR and OIS rates.
+-   **hpw_noise**: noise measure from Hu, Pan and Wang, i.e. the sum of
+    absolute errors from the Nelson-Siegel-Svensson smoothing model.
+-   **tips_noise**: Same as HPW but for TIPS.
+-   **Off_On_run**: Spread between Off-the-run and On-the-run 10y
+    nominal bonds.
+-   **AAA10Y**: Moody's AAA spread over 10y nominal bond (FRED).
+-   **BAA10Y**: Moody's BAA spread over 10y nominal bond (FRED,
+    monthly).
+-   **BAA_AAA**: Spread between BAA and AAA (FRED, monthly).
+-   **inflation_month**: month-on-month CPI log-changes (FRED, monthly).
+-   **Debt_to_GDP**: Debt-to-GDP ratio in natural units (FRED,
+    quarterly).
+-   **Debt_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable US debt (US treasury, monthly).
+-   **TIPS_growth_yoy**: year-on-year log-growth in outstanding of total
+    marketable inflation-indexed US debt (US treasury, monthly).
+-   **TIPS_ratio**: ratio of inflation-indexed debt outstanding over
+    total marketable outstanding debt (treasury, monthly).
+
+### ILSBEI term structure
+
+```{r ILSBEI plots, cache = T}
+library(ggplot2)
+
+ggplot(US_data %>% 
+    dplyr::select(year_month, ILSBEI2, ILSBEI3, ILSBEI5, ILSBEI7, ILSBEI10) %>%
+      pivot_longer(cols = c(2:6)),
+    aes(x = year_month, y = value, color = name)
+) + geom_line() + 
+  ylab("Annualized %") + xlab('') + labs(title = "Term Structure of ILS-BEI spreads") + 
+  scale_color_viridis_d()
+
+```
+
+### CDS term structure
+
+```{r CDS plots, cache = T}
+library(ggplot2)
+ggplot(US_data %>% 
+    dplyr::select(year_month, cds2, cds3, cds5, cds7, cds10) %>%
+      pivot_longer(cols = c(2:6)),
+    aes(x = year_month, y = value, color = name)
+) + geom_line() + 
+  ylab("Annualized %") + xlab('') + labs(title = "Term Structure of CDS spreads") + 
+  scale_color_viridis_d()
+```
+
+### All Controls plots
+
+```{r Controls plots, cache = T}
+library(ggplot2)
+ggplot(US_data %>% 
+    dplyr::select(year_month, vix, libor_ois, hpw_noise,
+                  tips_noise, Off_On_run, AAA10Y, BAA10Y,
+                  BAA_AAA, inflation_month, Debt_to_GDP,
+                  Debt_growth_yoy, TIPS_growth_yoy, TIPS_ratio) %>%
+      pivot_longer(cols = c(2:14)),
+    aes(x = year_month, y = value)
+) + geom_line() + 
+  ylab("") + xlab('') + labs(title = "All controls used in the regressions") +
+  facet_wrap(~name, scales = "free")
+```
+
+### Other variables plots
+
+```{r Other variable plots, cache = T}
+library(ggplot2)
+ggplot(US_data %>% 
+    dplyr::select(year_month, Real_GDP, real_GDP_growth_yoy, real_GDPDebt_growth_yoy, Debt_held_public, Debt_growth, TIPS_outstanding, TIPS_growth, BoFa_BBB_OAS,  BoFa_AA_OAS, BoFa_AAA_OAS) %>%
+      pivot_longer(cols = c(2:11)),
+    aes(x = year_month, y = value)
+) + geom_line() + 
+  ylab("") + xlab('') + labs(title = "Other variables") +
+  facet_wrap(~name, scales = "free")
+```
+
+## Robustness checks {.tabset}
+
+### Repo Spread
+
+### Inverse CDS depth
+
+### EURUSD
+
+### USD denominated CDS
+
+

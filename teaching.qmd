@@ -1,0 +1,14 @@
+---
+title: "Teaching"
+---
+
+:::{.margin-top:1.5cm}
+
+💰 **FINE 451** - Fixed Income Analysis (Bachelor)
+
+💵 **FINE 710** - Fixed Income Analysis (Ph.D.)
+
+🖥️ **FINE 460** - Financial Analytics: Machine Learning and Econometrics for business students
+
+🐍 <a href="papers/Python Slides.zip">**Python workshop**</a> for Masters in Finance students
+:::
