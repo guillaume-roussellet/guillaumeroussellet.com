@@ -7,13 +7,13 @@ website:
   navbar:
     background: "Lavender"
     left:
-      - href: research.qmd
+      - href: index.qmd
         text: "Research"
       - href: teaching.qmd
         text: "Teaching"
       - href: contact.qmd
         text: Contact
-      - href: "papers/CV 2025.pdf"
+      - href: "papers/CV 2026.pdf"
         text: "CV"
       
     tools:

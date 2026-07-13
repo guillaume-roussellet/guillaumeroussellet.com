@@ -1,3 +1,0 @@
-ggplot(total_params %>% filter(type == "Nominal", risk == "Defaultable", default == "Absorbing")) + 
-  geom_line(aes(x = maturities, y = yield*100)) +
-  geom_line(aes(x = maturities, y = yield_EH*100), col = "red") 
